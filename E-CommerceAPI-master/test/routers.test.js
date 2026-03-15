@@ -17,10 +17,36 @@ test("userRouter exposes registration, login, user, and verification routes", ()
   assert.ok(getRouteLayer(userRouter, "/single-profile"));
   assert.ok(getRouteLayer(userRouter, "/single-profile/:id"));
   assert.ok(getRouteLayer(userRouter, "/all-users"));
+  assert.ok(getRouteLayer(userRouter, "/logout-user"));
+  assert.ok(getRouteLayer(userRouter, "/session/presence"));
+  assert.ok(getRouteLayer(userRouter, "/session/presence-beacon"));
+  assert.ok(getRouteLayer(userRouter, "/admin/user-sessions"));
+  assert.ok(getRouteLayer(userRouter, "/admin/user-sessions/summary"));
   assert.deepEqual(getRouteHandlerNames(userRouter, "/all-users", "get"), [
     "verifyToken",
     "requireAdmin",
     "getAllUsers",
+  ]);
+  assert.deepEqual(getRouteHandlerNames(userRouter, "/logout-user", "post"), [
+    "verifyToken",
+    "logOut",
+  ]);
+  assert.deepEqual(getRouteHandlerNames(userRouter, "/session/presence", "post"), [
+    "verifyToken",
+    "updateUserSessionPresence",
+  ]);
+  assert.deepEqual(getRouteHandlerNames(userRouter, "/session/presence-beacon", "post"), [
+    "updateUserSessionPresenceFromBeacon",
+  ]);
+  assert.deepEqual(getRouteHandlerNames(userRouter, "/admin/user-sessions", "get"), [
+    "verifyToken",
+    "requireAdmin",
+    "getAdminUserSessions",
+  ]);
+  assert.deepEqual(getRouteHandlerNames(userRouter, "/admin/user-sessions/summary", "get"), [
+    "verifyToken",
+    "requireAdmin",
+    "getAdminUserSessionSummary",
   ]);
 });
 

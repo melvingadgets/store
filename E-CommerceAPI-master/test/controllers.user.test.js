@@ -5,6 +5,7 @@ const jwt = require("jsonwebtoken");
 
 const userModel = require("../dist/model/userModel").default;
 const profileModel = require("../dist/model/profileModel").default;
+const userSessionModel = require("../dist/model/userSessionModel").default;
 const emailVerification = require("../dist/utils/EmailVerification");
 const envModule = require("../dist/config/env");
 const userController = require("../dist/controller/UserController");
@@ -276,10 +277,35 @@ test("loginUser returns a token and sanitized user payload for verified accounts
   const restoreFindOne = stubMethod(userModel, "findOne", () => createPopulateChain(loginUser));
   const restoreCompare = stubMethod(bcrypt, "compare", async () => true);
   const restoreJwt = stubMethod(jwt, "sign", () => "signed-token");
+  const restoreDecode = stubMethod(jwt, "decode", () => ({ exp: 1_800_000_000 }));
+  const restoreSessionCreate = stubMethod(userSessionModel, "create", async (payload) => createDocument({
+    ...payload,
+    user: {
+      _id: "user-1",
+      userName: "Mel",
+      email: "mel@example.com",
+      role: "admin",
+    },
+  }));
   const req = createMockRequest({
     body: {
       email: "mel@example.com",
       password: "password123",
+      clientContext: {
+        platform: "Win32",
+        language: "en-US",
+        timezone: "Africa/Lagos",
+        path: "/login",
+        screen: {
+          width: 1440,
+          height: 900,
+          pixelRatio: 1.5,
+        },
+      },
+    },
+    headers: {
+      "user-agent": "Mozilla/5.0 Chrome/122.0.0.0 Safari/537.36",
+      "x-forwarded-for": "41.217.0.10",
     },
   });
   const res = createMockResponse();
@@ -291,10 +317,61 @@ test("loginUser returns a token and sanitized user payload for verified accounts
     assert.equal(res.body.data.token, "signed-token");
     assert.equal(res.body.data.user.password, undefined);
     assert.equal(res.body.data.user.role, "admin");
+    assert.equal(res.body.data.session.status, "online");
+    assert.equal(res.body.data.session.browser, "Chrome");
+    assert.equal(res.body.data.session.ipAddress, "41.217.0.10");
   } finally {
     restoreFindOne();
     restoreCompare();
     restoreJwt();
+    restoreDecode();
+    restoreSessionCreate();
+  }
+});
+
+test("logOut marks the tracked session as logged out", async () => {
+  const sessionRecord = createDocument({
+    sessionId: "session-1",
+    user: "user-1",
+    status: "online",
+    loginAt: new Date("2026-03-15T09:00:00.000Z"),
+    lastSeenAt: new Date("2026-03-15T09:01:00.000Z"),
+    userAgent: "Mozilla/5.0 Chrome/122.0.0.0 Safari/537.36",
+    deviceType: "desktop",
+    browser: "Chrome",
+    os: "Windows",
+    platform: "Win32",
+    language: "en-US",
+    timezone: "Africa/Lagos",
+    referrer: "",
+    screen: { width: 1440, height: 900, pixelRatio: 1.5 },
+    utm: { source: "", medium: "", campaign: "", term: "", content: "" },
+  });
+  const restoreFindSession = stubMethod(userSessionModel, "findOne", async () => sessionRecord);
+  const req = createMockRequest({
+    body: {
+      sessionId: "session-1",
+      clientContext: {
+        path: "/account",
+        visibilityState: "visible",
+      },
+    },
+    user: { _id: "user-1", userName: "Mel", role: "user" },
+    headers: {
+      "x-forwarded-for": "41.217.0.11",
+    },
+  });
+  const res = createMockResponse();
+
+  try {
+    await userController.logOut(req, res);
+
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.data.status, "logged_out");
+    assert.equal(sessionRecord.status, "logged_out");
+    assert.equal(sessionRecord.lastPath, "/account");
+  } finally {
+    restoreFindSession();
   }
 });
 

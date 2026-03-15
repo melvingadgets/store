@@ -10,11 +10,13 @@ import { logoutUser } from '../services/authService'
 import { handleError } from '../utils/axios'
 import { notify } from '../utils/notification'
 import { clearClientSessionState } from '../utils/sessionCleanup'
+import { buildUserSessionClientContext } from '../utils/userSessionTelemetry'
 
 const Account: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
   const navigate = useNavigate()
   const user = useSelector((state: RootState) => state.auth.user)
+  const session = useSelector((state: RootState) => state.auth.session)
   const [formValues, setFormValues] = useState({
     firstName: "",
     lastName: "",
@@ -93,7 +95,12 @@ const Account: React.FC = () => {
 
   const handleLogout = async () => {
     try {
-      await logoutUser()
+      if (session?.sessionId) {
+        await logoutUser({
+          sessionId: session.sessionId,
+          clientContext: buildUserSessionClientContext(),
+        })
+      }
     } catch {
       // Clear the local session even if the network call fails.
     } finally {

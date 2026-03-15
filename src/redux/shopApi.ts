@@ -18,6 +18,8 @@ import type {
   SwapConditionSelections,
   SwapEvaluationResult,
   SwapMetadata,
+  UserSessionRecord,
+  UserSessionSummary,
   User,
 } from "../types/domain";
 import apiClient, { type ApiClientRequestConfig } from "../utils/axios";
@@ -131,6 +133,21 @@ export const shopApi = createApi({
         suppressGlobalLoader: true,
       }),
       transformResponse: (response: ApiResponse<AssistantTimingSummary>) => response.data,
+    }),
+    getUserSessions: builder.query<UserSessionRecord[], { limit?: number; status?: string } | void>({
+      query: (args) => ({
+        url: "/admin/user-sessions",
+        params: args,
+        suppressGlobalLoader: true,
+      }),
+      transformResponse: (response: ApiResponse<UserSessionRecord[]>) => response.data,
+    }),
+    getUserSessionSummary: builder.query<UserSessionSummary, void>({
+      query: () => ({
+        url: "/admin/user-sessions/summary",
+        suppressGlobalLoader: true,
+      }),
+      transformResponse: (response: ApiResponse<UserSessionSummary>) => response.data,
     }),
     createProduct: builder.mutation<ApiResponse<Product>, { categoryId: string; formData: FormData }>({
       query: ({ categoryId, formData }) => ({
@@ -316,6 +333,8 @@ export const {
   useGetProductsQuery,
   useGetProfileQuery,
   useGetSwapMetadataQuery,
+  useGetUserSessionSummaryQuery,
+  useGetUserSessionsQuery,
   useRemoveCartItemCompletelyMutation,
   useSendAssistantMessageMutation,
   useUpdateProductStorageOptionsMutation,

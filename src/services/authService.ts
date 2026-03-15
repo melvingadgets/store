@@ -1,5 +1,5 @@
-import apiClient from "../utils/axios";
-import type { ApiResponse, AuthPayload } from "../types/domain";
+import apiClient, { type ApiClientRequestConfig } from "../utils/axios";
+import type { ApiResponse, AuthPayload, UserSessionClientContext, UserSessionRecord } from "../types/domain";
 
 export interface LoginPayload {
   email: string;
@@ -19,4 +19,9 @@ export const loginUser = (payload: LoginPayload) =>
 export const registerUser = (payload: RegisterPayload) =>
   apiClient.post<ApiResponse<{ user: AuthPayload["user"] }>>("/register", payload);
 
-export const logoutUser = () => apiClient.get<ApiResponse<null>>("/logout-user");
+export const logoutUser = (payload: { sessionId: string; clientContext: UserSessionClientContext }) =>
+  apiClient.post<ApiResponse<UserSessionRecord>>(
+    "/logout-user",
+    payload,
+    { suppressGlobalLoader: true } as ApiClientRequestConfig,
+  );

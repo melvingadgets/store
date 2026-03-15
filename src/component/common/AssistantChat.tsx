@@ -39,6 +39,7 @@ const AssistantChat: React.FC = () => {
   const [avatarCacheReady, setAvatarCacheReady] = useState(false)
   const [previousAvatarUrl, setPreviousAvatarUrl] = useState<string | null>(null)
   const lastUserIdRef = useRef<string | null>(user?._id ?? null)
+  const messagesViewportRef = useRef<HTMLDivElement | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const presenceRunRef = useRef(0)
   const presenceStartedAtRef = useRef(0)
@@ -47,6 +48,7 @@ const AssistantChat: React.FC = () => {
   const avatarTransitionTimeoutRef = useRef<number | null>(null)
   const lastAvatarUrlRef = useRef<string | null>(null)
   const presencePhaseTimeoutRef = useRef<number | null>(null)
+  const shouldStickToBottomRef = useRef(true)
 
   const isVisibleRoute = location.pathname === '/' || location.pathname.startsWith('/product')
   const productId = getProductIdFromPath(location.pathname)
@@ -158,13 +160,32 @@ const AssistantChat: React.FC = () => {
       return
     }
 
+    if (!shouldStickToBottomRef.current) {
+      return
+    }
+
     window.requestAnimationFrame(() => {
       messagesEndRef.current?.scrollIntoView({
         behavior: 'smooth',
         block: 'end',
       })
     })
-  }, [isLoading, isOpen, messages, presenceState])
+  }, [isLoading, isOpen, messages])
+
+  useEffect(() => {
+    if (!isOpen) {
+      return
+    }
+
+    shouldStickToBottomRef.current = true
+
+    window.requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({
+        behavior: 'auto',
+        block: 'end',
+      })
+    })
+  }, [isOpen])
 
   const quickReplies = useMemo(() => {
     if (productId) {
@@ -277,6 +298,16 @@ const AssistantChat: React.FC = () => {
     }, USER_TYPING_PAUSE_MS)
   }
 
+  const handleMessagesScroll = () => {
+    const viewport = messagesViewportRef.current
+    if (!viewport) {
+      return
+    }
+
+    const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight
+    shouldStickToBottomRef.current = distanceFromBottom <= 48
+  }
+
   return (
     <div
       className={`pointer-events-none fixed z-[60] ${
@@ -303,7 +334,11 @@ const AssistantChat: React.FC = () => {
               </div>
             </div>
 
-            <div className='assistant-messages-viewport mt-3 pr-1'>
+            <div
+              ref={messagesViewportRef}
+              onScroll={handleMessagesScroll}
+              className='assistant-messages-viewport mt-3 pr-1'
+            >
               <div className='assistant-messages-stack'>
                 {messages.map((message) => (
                   <div

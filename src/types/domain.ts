@@ -172,9 +172,87 @@ export interface GuestCheckoutRecord {
 
 export type CheckoutRecord = OrderRecord | GuestCheckoutRecord;
 
+export type UserSessionStatus = "online" | "idle" | "offline" | "logged_out" | "expired";
+
+export interface UserSessionScreen {
+  width: number;
+  height: number;
+  pixelRatio: number;
+}
+
+export interface UserSessionUtm {
+  source: string;
+  medium: string;
+  campaign: string;
+  term: string;
+  content: string;
+}
+
+export interface UserSessionRecord {
+  sessionId: string;
+  loginAt: string | null;
+  lastSeenAt: string | null;
+  logoutAt: string | null;
+  tokenExpiresAt: string | null;
+  status: UserSessionStatus;
+  lastEvent: string;
+  lastPath: string;
+  lastVisibilityState: string;
+  lastOnlineState: boolean;
+  ipAddress: string;
+  userAgent: string;
+  deviceType: string;
+  browser: string;
+  os: string;
+  platform: string;
+  language: string;
+  timezone: string;
+  referrer: string;
+  screen: UserSessionScreen;
+  utm: UserSessionUtm;
+  user?: Pick<User, "_id" | "userName" | "email" | "role">;
+}
+
+export interface UserSessionSummaryBreakdownEntry {
+  label: string;
+  count: number;
+}
+
+export interface UserSessionSummary {
+  overview: {
+    totalSessions: number;
+    onlineCount: number;
+    idleCount: number;
+    offlineCount: number;
+    loggedOutCount: number;
+    expiredCount: number;
+    activeUsers: number;
+  };
+  breakdowns: {
+    browsers: UserSessionSummaryBreakdownEntry[];
+    deviceTypes: UserSessionSummaryBreakdownEntry[];
+    operatingSystems: UserSessionSummaryBreakdownEntry[];
+  };
+  recentSessions: UserSessionRecord[];
+}
+
+export interface UserSessionClientContext {
+  userAgent?: string;
+  platform?: string;
+  language?: string;
+  timezone?: string;
+  referrer?: string;
+  path?: string;
+  visibilityState?: "visible" | "hidden" | "prerender";
+  online?: boolean;
+  screen?: Partial<UserSessionScreen>;
+  utm?: Partial<UserSessionUtm>;
+}
+
 export interface AuthPayload {
   token: string;
   user: User;
+  session: UserSessionRecord;
 }
 
 export type AssistantIntent = "trade_in" | "product" | "general" | "unknown";

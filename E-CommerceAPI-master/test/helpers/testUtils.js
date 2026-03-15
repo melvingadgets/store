@@ -111,6 +111,9 @@ function createPopulateChain(result, options = {}) {
     sort() {
       return chain;
     },
+    limit() {
+      return chain;
+    },
     select() {
       return chain;
     },

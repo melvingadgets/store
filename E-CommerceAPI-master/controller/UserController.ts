@@ -1,11 +1,21 @@
 import type { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import crypto from "node:crypto";
 import type { SignOptions } from "jsonwebtoken";
 import profileModel from "../model/profileModel";
 import userModel from "../model/userModel";
+import userSessionModel from "../model/userSessionModel";
 import { env, hasMailConfig } from "../config/env";
 import { sendVerificationEmail } from "../utils/EmailVerification";
+import {
+  buildSessionSnapshot,
+  detectBrowser,
+  detectDeviceType,
+  detectOperatingSystem,
+  extractClientIp,
+  normalizeClientContext,
+} from "../utils/userSessionTelemetry";
 
 interface VerificationTokenPayload {
   purpose: "verify-account";
@@ -145,9 +155,10 @@ export const createUser = async (req: Request, res: Response): Promise<Response>
 
 export const loginUser = async (req: Request, res: Response): Promise<Response> => {
   try {
-    const { email, password } = req.body as {
+    const { email, password, clientContext } = req.body as {
       email?: string;
       password?: string;
+      clientContext?: unknown;
     };
 
     const normalizedEmail = email?.trim().toLowerCase();
@@ -203,6 +214,48 @@ export const loginUser = async (req: Request, res: Response): Promise<Response> 
       userName: checkEmail.get("userName") as string,
       role: checkEmail.get("role") as Express.UserPayload["role"],
     });
+    const sessionId = crypto.randomUUID();
+    const normalizedClientContext = normalizeClientContext(clientContext);
+    const userAgent =
+      normalizedClientContext.userAgent?.trim() || String(req.headers["user-agent"] ?? "").trim();
+    const platform = normalizedClientContext.platform?.trim() ?? "";
+    const decodedToken = jwt.decode(token) as { exp?: number } | null;
+    const tokenExpiresAt = typeof decodedToken?.exp === "number"
+      ? new Date(decodedToken.exp * 1000)
+      : null;
+    const trackedSession = await userSessionModel.create({
+      sessionId,
+      user: checkEmail._id,
+      loginAt: new Date(),
+      lastSeenAt: new Date(),
+      tokenExpiresAt,
+      status: normalizedClientContext.visibilityState === "hidden" ? "idle" : "online",
+      lastEvent: "login",
+      lastPath: normalizedClientContext.path ?? "",
+      lastVisibilityState: normalizedClientContext.visibilityState ?? "visible",
+      lastOnlineState: normalizedClientContext.online ?? true,
+      ipAddress: extractClientIp(req),
+      userAgent,
+      deviceType: detectDeviceType(userAgent),
+      browser: detectBrowser(userAgent),
+      os: detectOperatingSystem(userAgent, platform),
+      platform,
+      language: normalizedClientContext.language ?? "",
+      timezone: normalizedClientContext.timezone ?? "",
+      referrer: normalizedClientContext.referrer ?? "",
+      screen: {
+        width: normalizedClientContext.screen?.width ?? 0,
+        height: normalizedClientContext.screen?.height ?? 0,
+        pixelRatio: normalizedClientContext.screen?.pixelRatio ?? 1,
+      },
+      utm: {
+        source: normalizedClientContext.utm?.source ?? "",
+        medium: normalizedClientContext.utm?.medium ?? "",
+        campaign: normalizedClientContext.utm?.campaign ?? "",
+        term: normalizedClientContext.utm?.term ?? "",
+        content: normalizedClientContext.utm?.content ?? "",
+      },
+    });
 
     return res.status(200).json({
       success: 1,
@@ -210,6 +263,7 @@ export const loginUser = async (req: Request, res: Response): Promise<Response> 
       data: {
         token,
         user: sanitizeUser(checkEmail),
+        session: buildSessionSnapshot(trackedSession),
       },
     });
   } catch {
@@ -275,11 +329,89 @@ export const getAllUsers = async (_req: Request, res: Response): Promise<Respons
   }
 };
 
-export const logOut = async (_req: Request, res: Response): Promise<Response> =>
-  res.status(200).json({
-    success: 1,
-    message: "logout successful",
-  });
+export const logOut = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const userId = req.user?._id;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: 0,
+        message: "authentication is required",
+      });
+    }
+
+    const { sessionId, clientContext } = req.body as {
+      sessionId?: string;
+      clientContext?: unknown;
+    };
+
+    const normalizedSessionId = String(sessionId ?? "").trim();
+    if (!normalizedSessionId) {
+      return res.status(400).json({
+        success: 0,
+        message: "sessionId is required",
+      });
+    }
+
+    const trackedSession = await userSessionModel.findOne({
+      sessionId: normalizedSessionId,
+      user: userId,
+    });
+
+    if (!trackedSession) {
+      return res.status(404).json({
+        success: 0,
+        message: "session not found",
+      });
+    }
+
+    const normalizedClientContext = normalizeClientContext(clientContext);
+    trackedSession.lastSeenAt = new Date();
+    trackedSession.logoutAt = new Date();
+    trackedSession.status = "logged_out";
+    trackedSession.lastEvent = "logout";
+    trackedSession.lastPath = normalizedClientContext.path ?? trackedSession.lastPath;
+    trackedSession.lastVisibilityState = normalizedClientContext.visibilityState ?? trackedSession.lastVisibilityState;
+    trackedSession.lastOnlineState = normalizedClientContext.online ?? trackedSession.lastOnlineState;
+    trackedSession.ipAddress = extractClientIp(req) || trackedSession.ipAddress;
+    trackedSession.userAgent = normalizedClientContext.userAgent?.trim() || trackedSession.userAgent;
+    trackedSession.platform = normalizedClientContext.platform ?? trackedSession.platform;
+    trackedSession.language = normalizedClientContext.language ?? trackedSession.language;
+    trackedSession.timezone = normalizedClientContext.timezone ?? trackedSession.timezone;
+    trackedSession.referrer = normalizedClientContext.referrer ?? trackedSession.referrer;
+
+    if (normalizedClientContext.screen) {
+      trackedSession.screen = {
+        width: normalizedClientContext.screen.width ?? trackedSession.screen?.width ?? 0,
+        height: normalizedClientContext.screen.height ?? trackedSession.screen?.height ?? 0,
+        pixelRatio: normalizedClientContext.screen.pixelRatio ?? trackedSession.screen?.pixelRatio ?? 1,
+      };
+    }
+
+    if (normalizedClientContext.utm) {
+      trackedSession.utm = {
+        source: normalizedClientContext.utm.source ?? trackedSession.utm?.source ?? "",
+        medium: normalizedClientContext.utm.medium ?? trackedSession.utm?.medium ?? "",
+        campaign: normalizedClientContext.utm.campaign ?? trackedSession.utm?.campaign ?? "",
+        term: normalizedClientContext.utm.term ?? trackedSession.utm?.term ?? "",
+        content: normalizedClientContext.utm.content ?? trackedSession.utm?.content ?? "",
+      };
+    }
+
+    await trackedSession.save();
+
+    return res.status(200).json({
+      success: 1,
+      message: "logout successful",
+      data: buildSessionSnapshot(trackedSession),
+    });
+  } catch {
+    return res.status(500).json({
+      success: 0,
+      message: "logout failed",
+    });
+  }
+};
 
 export const verifyUser = async (req: Request, res: Response): Promise<Response> => {
   try {

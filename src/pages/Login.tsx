@@ -8,6 +8,7 @@ import { loginSuccess } from '../features/auth/authSlice'
 import type { AppDispatch } from '../redux/store'
 import apiClient, { handleError } from '../utils/axios'
 import { notify } from '../utils/notification'
+import { buildUserSessionClientContext } from '../utils/userSessionTelemetry'
 
 const Login:React.FC = () => {
   const navigate = useNavigate()
@@ -30,9 +31,12 @@ const Login:React.FC = () => {
     onSubmit: async (values, {setSubmitting}) =>{
       setSubmitting(true)
       try{
-        const response = await apiClient.post("/login", values)
-        const { token, user } = response.data.data
-        dispatch(loginSuccess({user, token}))
+        const response = await apiClient.post("/login", {
+          ...values,
+          clientContext: buildUserSessionClientContext(),
+        })
+        const { token, user, session } = response.data.data
+        dispatch(loginSuccess({user, token, session}))
         notify("success", response.data.message)
         navigate("/")
       }catch(error){

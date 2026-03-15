@@ -7,6 +7,7 @@ const categoryModel = require("../dist/model/categoryModel").default;
 const productModel = require("../dist/model/productModel").default;
 const cartModel = require("../dist/model/cartModel").default;
 const orderModel = require("../dist/model/orderModel").default;
+const userSessionModel = require("../dist/model/userSessionModel").default;
 
 test("user schema protects passwords and defaults role to user", () => {
   assert.equal(userModel.schema.path("password").options.select, false);
@@ -44,4 +45,18 @@ test("order schema limits payment and order state values", () => {
     "cancelled",
   ]);
   assert.equal(orderModel.schema.path("orderStatus").defaultValue, "created");
+});
+
+test("user session schema tracks presence and device telemetry", () => {
+  assert.deepEqual(userSessionModel.schema.path("status").enumValues, [
+    "online",
+    "idle",
+    "offline",
+    "logged_out",
+    "expired",
+  ]);
+  assert.equal(userSessionModel.schema.path("sessionId").options.unique, true);
+  assert.equal(userSessionModel.schema.path("user").isRequired, true);
+  assert.equal(userSessionModel.schema.path("screen.width").instance, "Number");
+  assert.equal(userSessionModel.schema.path("utm.source").instance, "String");
 });

@@ -12,6 +12,7 @@ import swapRouter from "./router/swapRouter";
 import assistantRouter from "./router/assistantRouter";
 
 export const mainApp = (app: Application) => {
+  app.set("trust proxy", true);
   app.use(cors());
   app.use(morgan("dev"));
   app.use(express.json());
