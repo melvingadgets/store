@@ -18,6 +18,7 @@ const EasyBuy = lazy(() => import("../pages/EasyBuy"))
 const History = lazy(() => import("../pages/History"))
 const Account = lazy(() => import("../pages/Account"))
 const Admin = lazy(() => import("../pages/Admin"))
+const AdminSessions = lazy(() => import("../pages/AdminSessions"))
 const SwapDevice = lazy(() => import("../pages/SwapDevice"))
 // const Fakeproduct = lazy(() => import("../loginFake/Productss"))
 const Checkout = lazy(() => import("../pages/Checkout"))
@@ -49,6 +50,7 @@ const routesConfig: RouteObject[] = [
                     {path: "/account", element: withSuspense(Account)},
                     {path: "/settings", element: withSuspense(Account)},
                     {path: "/admin", element: withSuspense(Admin)},
+                    {path: "/admin/sessions", element: withSuspense(AdminSessions)},
                     {path: "/menu", element: withSuspense(Admin)},
                     {path: "/history", element: withSuspense(History)},
                   ]

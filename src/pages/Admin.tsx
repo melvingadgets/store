@@ -313,14 +313,13 @@ const Admin: React.FC = () => {
           </div>
 
           <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-            <button
-              type="button"
-              onClick={() => scrollToSection("user-presence")}
+            <Link
+              to="/admin/sessions"
               className="ios-secondary-button w-full justify-center bg-white/18 text-white backdrop-blur-sm sm:w-auto"
             >
               <MdOutlinePeople size={18} />
               View logged-in users
-            </button>
+            </Link>
             <button
               type="button"
               onClick={() => scrollToSection("assistant-timing")}

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import BlurLoadingContainer from '../component/common/BlurLoadingContainer'
 import { FaUserCircle } from 'react-icons/fa'
-import { MdOutlineArrowBack } from 'react-icons/md'
+import { MdOutlineAdminPanelSettings, MdOutlineArrowBack } from 'react-icons/md'
 import { useDispatch, useSelector } from 'react-redux'
 import { Link, useNavigate } from 'react-router-dom'
 import { useGetProfileQuery, useUpdateProfileImageMutation, useUpdateProfileMutation } from '../redux/shopApi'
@@ -31,6 +31,7 @@ const Account: React.FC = () => {
   const [updateProfileImageMutation, { isLoading: savingImage }] = useUpdateProfileImageMutation()
   const saving = savingProfile || savingImage
   const userRecord = user!
+  const isAdmin = userRecord.role === "admin" || userRecord.role === "superadmin"
 
   const profileRecord = account?.profile && typeof account.profile === "object" ? account.profile : null
 
@@ -203,6 +204,12 @@ const Account: React.FC = () => {
               <Link to="/history" className="ios-secondary-button w-full justify-center sm:w-auto">
                 View orders
               </Link>
+              {isAdmin ? (
+                <Link to="/admin/sessions" className="ios-secondary-button w-full justify-center sm:w-auto">
+                  <MdOutlineAdminPanelSettings size={18} />
+                  View sessions
+                </Link>
+              ) : null}
               <button
                 type="button"
                 onClick={() => void handleLogout()}
