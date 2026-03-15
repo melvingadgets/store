@@ -135,6 +135,13 @@ const Admin: React.FC = () => {
     [products],
   )
 
+  const scrollToSection = (sectionId: string) => {
+    document.getElementById(sectionId)?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    })
+  }
+
   const handleCategoryChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target
     setCategoryForm((current) => ({
@@ -304,10 +311,29 @@ const Admin: React.FC = () => {
               <p className="mt-2 text-xl font-bold">{products.length}</p>
             </div>
           </div>
+
+          <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => scrollToSection("user-presence")}
+              className="ios-secondary-button w-full justify-center bg-white/18 text-white backdrop-blur-sm sm:w-auto"
+            >
+              <MdOutlinePeople size={18} />
+              View logged-in users
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollToSection("assistant-timing")}
+              className="ios-secondary-button w-full justify-center bg-white/12 text-white backdrop-blur-sm sm:w-auto"
+            >
+              <MdOutlineAdminPanelSettings size={18} />
+              View AI timing
+            </button>
+          </div>
         </div>
       </section>
 
-      <section className="ios-card mb-4">
+      <section id="assistant-timing" className="ios-card mb-4">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <div className="ios-icon-button !h-10 !w-10 text-primary">
@@ -410,7 +436,7 @@ const Admin: React.FC = () => {
         )}
       </section>
 
-      <section className="ios-card mb-4">
+      <section id="user-presence" className="ios-card mb-4">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <div className="ios-icon-button !h-10 !w-10 text-primary">

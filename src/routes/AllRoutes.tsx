@@ -5,6 +5,7 @@ import { RequireAuth, RequireGuest } from "../component/common/RouteGuards"
 import AppShell from "../layout/AppShell"
 import WebLayout from "../layout/WebLayout"
 import ErrorBoundaryPage from "../pages/ErrorBoundaryPage"
+import NotFoundPage from "../pages/NotFoundPage"
 
 //lazyloading pages
 const Home = lazy(() => import("../pages/Home"))
@@ -67,6 +68,7 @@ const routesConfig: RouteObject[] = [
       { path: "/product/:id/easybuy", element: withSuspense(EasyBuy) },
       { path: "/product/:id/swap", element: withSuspense(SwapDevice) },
       {path: "/product/:id", element: withSuspense(ProductDetails)},
+      { path: "*", element: <NotFoundPage /> },
       ]
     },
 //   { path: "fakeproduct", element: withSuspense(Fakeproduct) },
