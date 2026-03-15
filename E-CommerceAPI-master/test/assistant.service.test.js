@@ -1,0 +1,324 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+
+const { createAssistantService } = require("../dist/assistant/assistantService");
+const { createDocument } = require("./helpers/testUtils");
+
+const createSessionStore = ({ existingSession } = {}) => {
+  const state = {
+    findCalls: [],
+    createCalls: [],
+    createdSession: null,
+  };
+
+  return {
+    state,
+    model: {
+      findOne: async (query) => {
+        state.findCalls.push(query);
+        return existingSession ?? null;
+      },
+      create: async (payload) => {
+        state.createCalls.push(payload);
+        state.createdSession = createDocument({
+          ...payload,
+          messages: payload.messages ?? [],
+          toolCalls: payload.toolCalls ?? [],
+        });
+        return state.createdSession;
+      },
+    },
+  };
+};
+
+test("assistantService creates a new session when sessionId is absent", async () => {
+  const sessionStore = createSessionStore();
+  const providerCalls = [];
+  const service = createAssistantService({
+    provider: {
+      run: async (input) => {
+        providerCalls.push(input);
+        return {
+          type: "final",
+          reply: "How can I help?",
+          intent: "general",
+        };
+      },
+    },
+    sessionModel: sessionStore.model,
+    registry: {
+      listTools: () => [],
+      executeToolCall: async () => ({ ok: false, error: "unused" }),
+    },
+  });
+
+  const result = await service.handleMessage({
+    message: "Hi there",
+  });
+
+  assert.equal(sessionStore.state.findCalls.length, 0);
+  assert.equal(sessionStore.state.createCalls.length, 1);
+  assert.equal(result.reply, "How can I help?");
+  assert.equal(result.intent, "general");
+  assert.equal(typeof result.sessionId, "string");
+  assert.equal(providerCalls.length, 1);
+  assert.equal(sessionStore.state.createdSession.messages.length, 2);
+  assert.equal(sessionStore.state.createdSession.saveCallCount, 1);
+});
+
+test("assistantService reuses an existing session when sessionId is present", async () => {
+  const existingSession = createDocument({
+    sessionId: "session-1",
+    messages: [{ role: "assistant", content: "Earlier reply" }],
+    toolCalls: [],
+    intent: "unknown",
+  });
+  const sessionStore = createSessionStore({ existingSession });
+  const providerCalls = [];
+  const service = createAssistantService({
+    provider: {
+      run: async (input) => {
+        providerCalls.push(input);
+        return {
+          type: "final",
+          reply: "Current answer",
+          intent: "product",
+        };
+      },
+    },
+    sessionModel: sessionStore.model,
+    registry: {
+      listTools: () => [],
+      executeToolCall: async () => ({ ok: false, error: "unused" }),
+    },
+  });
+
+  const result = await service.handleMessage({
+    sessionId: "session-1",
+    message: "Tell me more",
+    userId: "user-1",
+  });
+
+  assert.deepEqual(sessionStore.state.findCalls, [{ sessionId: "session-1", userId: "user-1" }]);
+  assert.equal(sessionStore.state.createCalls.length, 0);
+  assert.equal(result.sessionId, "session-1");
+  assert.equal(result.intent, "product");
+  assert.equal(providerCalls[0].messages[0].content, "Earlier reply");
+  assert.equal(existingSession.saveCallCount, 1);
+});
+
+test("assistantService creates a new session when the provided sessionId belongs to another user", async () => {
+  const foreignSession = createDocument({
+    sessionId: "session-1",
+    userId: "user-2",
+    messages: [],
+    toolCalls: [],
+    intent: "unknown",
+  });
+  const state = {
+    findCalls: [],
+    createCalls: [],
+    createdSession: null,
+  };
+  const sessionModel = {
+    findOne: async (query) => {
+      state.findCalls.push(query);
+
+      if (query.sessionId === "session-1" && query.userId === "user-1") {
+        return null;
+      }
+
+      if (query.sessionId === "session-1" && !query.userId) {
+        return foreignSession;
+      }
+
+      return null;
+    },
+    create: async (payload) => {
+      state.createCalls.push(payload);
+      state.createdSession = createDocument({
+        ...payload,
+        messages: payload.messages ?? [],
+        toolCalls: payload.toolCalls ?? [],
+      });
+      return state.createdSession;
+    },
+  };
+  const service = createAssistantService({
+    provider: {
+      run: async () => ({
+        type: "final",
+        reply: "Fresh session reply",
+        intent: "general",
+      }),
+    },
+    sessionModel,
+    registry: {
+      listTools: () => [],
+      executeToolCall: async () => ({ ok: false, error: "unused" }),
+    },
+  });
+
+  const result = await service.handleMessage({
+    sessionId: "session-1",
+    message: "Hi",
+    userId: "user-1",
+  });
+
+  assert.deepEqual(state.findCalls, [
+    { sessionId: "session-1", userId: "user-1" },
+    { sessionId: "session-1" },
+  ]);
+  assert.equal(state.createCalls.length, 1);
+  assert.equal(state.createCalls[0].userId, "user-1");
+  assert.notEqual(result.sessionId, "session-1");
+});
+
+test("assistantService handles a tool call and persists the result", async () => {
+  const sessionStore = createSessionStore();
+  let providerTurn = 0;
+  const registryCalls = [];
+  const service = createAssistantService({
+    provider: {
+      run: async () => {
+        providerTurn += 1;
+
+        if (providerTurn === 1) {
+          return {
+            type: "tool_calls",
+            toolCalls: [
+              {
+                id: "tool-1",
+                name: "evaluate_swap",
+                arguments: { tradeInModel: "iPhone 13" },
+              },
+            ],
+          };
+        }
+
+        return {
+          type: "final",
+          reply: "Your estimated trade-in credit is ready.",
+          intent: "trade_in",
+        };
+      },
+    },
+    sessionModel: sessionStore.model,
+    registry: {
+      listTools: () => [{ name: "evaluate_swap", description: "", parameters: {} }],
+      executeToolCall: async (input) => {
+        registryCalls.push(input);
+        return {
+          ok: true,
+          data: {
+            customerEstimateMin: 500,
+            customerEstimateMax: 550,
+          },
+        };
+      },
+    },
+  });
+
+  const result = await service.handleMessage({
+    message: "Please calculate this based on the details provided.",
+    userContext: {
+      productId: "target-1",
+    },
+  });
+
+  assert.equal(result.intent, "trade_in");
+  assert.deepEqual(result.usedTools, [{ name: "evaluate_swap", ok: true }]);
+  assert.deepEqual(registryCalls, [
+    {
+      name: "evaluate_swap",
+      arguments: { tradeInModel: "iPhone 13" },
+      userContext: { productId: "target-1" },
+      userId: undefined,
+    },
+  ]);
+  assert.equal(sessionStore.state.createdSession.toolCalls.length, 1);
+  assert.match(sessionStore.state.createdSession.toolCalls[0].resultSummary, /customerEstimateMin/);
+});
+
+test("assistantService supports multiple tool calls before a final reply", async () => {
+  const sessionStore = createSessionStore();
+  let providerTurn = 0;
+  const toolNames = [];
+  const service = createAssistantService({
+    provider: {
+      run: async () => {
+        providerTurn += 1;
+
+        if (providerTurn === 1) {
+          return {
+            type: "tool_calls",
+            toolCalls: [
+              { id: "tool-1", name: "search_products", arguments: { query: "iPhone 15" } },
+              { id: "tool-2", name: "get_product_details", arguments: { productId: "prod-1" } },
+            ],
+          };
+        }
+
+        return {
+          type: "final",
+          reply: "I found a matching iPhone 15 and its details.",
+          intent: "product",
+        };
+      },
+    },
+    sessionModel: sessionStore.model,
+    registry: {
+      listTools: () => [
+        { name: "search_products", description: "", parameters: {} },
+        { name: "get_product_details", description: "", parameters: {} },
+      ],
+      executeToolCall: async ({ name }) => {
+        toolNames.push(name);
+        return {
+          ok: true,
+          data: { name },
+        };
+      },
+    },
+  });
+
+  const result = await service.handleMessage({
+    message: "Do you have an iPhone 15?",
+  });
+
+  assert.equal(result.intent, "product");
+  assert.deepEqual(toolNames, ["search_products", "get_product_details"]);
+  assert.deepEqual(result.usedTools, [
+    { name: "search_products", ok: true },
+    { name: "get_product_details", ok: true },
+  ]);
+  assert.equal(sessionStore.state.createdSession.toolCalls.length, 2);
+});
+
+test("assistantService returns a fallback reply when the provider fails", async () => {
+  const sessionStore = createSessionStore();
+  const service = createAssistantService({
+    provider: {
+      run: async () => {
+        throw new Error("provider failed");
+      },
+    },
+    sessionModel: sessionStore.model,
+    registry: {
+      listTools: () => [],
+      executeToolCall: async () => ({ ok: false, error: "unused" }),
+    },
+  });
+
+  const result = await service.handleMessage({
+    message: "Need help",
+  });
+
+  assert.equal(
+    result.reply,
+    "I'm having trouble answering that right now. Please try again in a moment.",
+  );
+  assert.equal(result.intent, "unknown");
+  assert.equal(sessionStore.state.createdSession.messages.at(-1).content, result.reply);
+  assert.equal(sessionStore.state.createdSession.saveCallCount, 1);
+});

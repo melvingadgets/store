@@ -1,0 +1,9 @@
+.env
+.env.local
+dist
+E-CommerceAPI-master/.env
+E-CommerceAPI-master/.env.local
+E-CommerceAPI-master/dist
+E-CommerceAPI-master/uploads
+E-CommerceAPI-master/node_modules
+node_modules
