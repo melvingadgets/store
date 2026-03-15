@@ -5,6 +5,7 @@ const categoryModel = require("../dist/model/categoryModel").default;
 const productModel = require("../dist/model/productModel").default;
 const userModel = require("../dist/model/userModel").default;
 const cloudinary = require("../dist/utils/cloudinary").default;
+const easyBuyCatalog = require("../dist/utils/easyBuyCatalog");
 const envModule = require("../dist/config/env");
 const productController = require("../dist/controller/productController");
 const {
@@ -108,6 +109,7 @@ test("createProduct creates a product and appends it to the category", async () 
 test("ViewAllProduct returns the full product collection", async () => {
   const products = [{ _id: "product-1", name: "Phone" }];
   const restoreFind = stubMethod(productModel, "find", () => createPopulateChain(products));
+  const restoreCatalogFetch = stubMethod(easyBuyCatalog, "fetchPublicEasyBuyCatalog", async () => null);
   const res = createMockResponse();
 
   try {
@@ -117,6 +119,41 @@ test("ViewAllProduct returns the full product collection", async () => {
     assert.deepEqual(res.body.data, products);
   } finally {
     restoreFind();
+    restoreCatalogFetch();
+  }
+});
+
+test("ViewAllProduct prefers EasyBuy catalog images when available", async () => {
+  const products = [{ _id: "product-1", name: "iPhone 15", image: "http://localhost:2222/uploads/phone.png" }];
+  const restoreFind = stubMethod(productModel, "find", () => createPopulateChain(products));
+  const restoreCatalogFetch = stubMethod(easyBuyCatalog, "fetchPublicEasyBuyCatalog", async () => ({
+    models: [
+      {
+        model: "iPhone 15",
+        imageUrl: "https://easybuy.example/iphone-15.png",
+        capacities: ["128GB"],
+        allowedPlans: ["Monthly"],
+        downPaymentPercentage: 40,
+        pricesByCapacity: { "128GB": 900000 },
+      },
+    ],
+    planRules: {
+      monthlyDurations: [],
+      weeklyDurations: [],
+      monthlyMarkupMultipliers: {},
+      weeklyMarkupMultipliers: {},
+    },
+  }));
+  const res = createMockResponse();
+
+  try {
+    await productController.ViewAllProduct(createMockRequest(), res);
+
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.data[0].image, "https://easybuy.example/iphone-15.png");
+  } finally {
+    restoreFind();
+    restoreCatalogFetch();
   }
 });
 

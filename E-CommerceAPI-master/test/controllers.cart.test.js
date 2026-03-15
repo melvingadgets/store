@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const cartModel = require("../dist/model/cartModel").default;
 const productModel = require("../dist/model/productModel").default;
 const userModel = require("../dist/model/userModel").default;
+const easyBuyCatalog = require("../dist/utils/easyBuyCatalog");
 const cartController = require("../dist/controller/cartController");
 const {
   createDocument,
@@ -225,6 +226,7 @@ test("removeCartItem removes the cart item when quantity reaches zero", async ()
 
 test("getCart returns an empty cart payload when the user has no saved cart", async () => {
   const restoreCartFind = stubMethod(cartModel, "findOne", () => createPopulateChain(null));
+  const restoreCatalogFetch = stubMethod(easyBuyCatalog, "fetchPublicEasyBuyCatalog", async () => null);
   const req = createMockRequest({
     params: {},
     user: { _id: "user-1", userName: "Mel", role: "user" },
@@ -240,6 +242,60 @@ test("getCart returns an empty cart payload when the user has no saved cart", as
     assert.equal(res.body.data.bill, 0);
   } finally {
     restoreCartFind();
+    restoreCatalogFetch();
+  }
+});
+
+test("getCart prefers EasyBuy catalog images for populated products", async () => {
+  const cart = {
+    _id: "cart-1",
+    user: "user-1",
+    bill: 900000,
+    cartItem: [
+      {
+        quantity: 1,
+        price: 900000,
+        products: {
+          _id: "product-1",
+          name: "iPhone 15",
+          image: "http://localhost:2222/uploads/phone.png",
+        },
+      },
+    ],
+  };
+  const restoreCartFind = stubMethod(cartModel, "findOne", () => createPopulateChain(cart));
+  const restoreCatalogFetch = stubMethod(easyBuyCatalog, "fetchPublicEasyBuyCatalog", async () => ({
+    models: [
+      {
+        model: "iPhone 15",
+        imageUrl: "https://easybuy.example/iphone-15.png",
+        capacities: ["128GB"],
+        allowedPlans: ["Monthly"],
+        downPaymentPercentage: 40,
+        pricesByCapacity: { "128GB": 900000 },
+      },
+    ],
+    planRules: {
+      monthlyDurations: [],
+      weeklyDurations: [],
+      monthlyMarkupMultipliers: {},
+      weeklyMarkupMultipliers: {},
+    },
+  }));
+  const req = createMockRequest({
+    params: {},
+    user: { _id: "user-1", userName: "Mel", role: "user" },
+  });
+  const res = createMockResponse();
+
+  try {
+    await cartController.getCart(req, res);
+
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.data.cartItem[0].products.image, "https://easybuy.example/iphone-15.png");
+  } finally {
+    restoreCartFind();
+    restoreCatalogFetch();
   }
 });
 

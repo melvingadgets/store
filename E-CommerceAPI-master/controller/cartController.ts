@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import cartModel from "../model/cartModel";
 import productModel from "../model/productModel";
 import userModel from "../model/userModel";
+import { loadCatalogModels, withCatalogImagesForCart } from "../utils/catalogImagePresenter";
 import { findStorageOption, normalizeCapacity } from "../utils/storageOptions";
 
 const calculateBill = (items: Array<{ quantity: number; price: number }>) =>
@@ -98,16 +99,20 @@ export const getCart = async (req: Request, res: Response): Promise<Response> =>
     }
 
     const cart = await loadActiveCartForUser(userId);
+    const catalogModels = await loadCatalogModels();
 
     return res.status(200).json({
       success: 1,
       message: "cart loaded successfully",
-      data: cart ?? {
-        user: userId,
-        cartType: "saved",
-        cartItem: [],
-        bill: 0,
-      },
+      data: withCatalogImagesForCart(
+        cart ?? {
+          user: userId,
+          cartType: "saved",
+          cartItem: [],
+          bill: 0,
+        },
+        catalogModels,
+      ),
     });
   } catch {
     return res.status(500).json({
@@ -197,11 +202,12 @@ export const addToCart = async (req: Request, res: Response): Promise<Response> 
     }
 
     const hydratedCart = await createHydratedCart(userId, checkUserCart._id.toString());
+    const catalogModels = await loadCatalogModels();
 
     return res.status(200).json({
       success: 1,
       message: "cart updated successfully",
-      data: hydratedCart ?? checkUserCart,
+      data: withCatalogImagesForCart(hydratedCart ?? checkUserCart, catalogModels),
     });
   } catch {
     return res.status(500).json({
@@ -258,17 +264,20 @@ export const removeCartItem = async (req: Request, res: Response): Promise<Respo
     await checkUserCart.save();
 
     const hydratedCart = await createHydratedCart(userId, checkUserCart._id.toString());
+    const catalogModels = await loadCatalogModels();
 
     return res.status(200).json({
       success: 1,
       message: "item removed from cart",
-      data:
+      data: withCatalogImagesForCart(
         hydratedCart ??
-        ({
-          user: userId,
-          cartItem: [],
-          bill: 0,
-        } as const),
+          ({
+            user: userId,
+            cartItem: [],
+            bill: 0,
+          } as const),
+        catalogModels,
+      ),
     });
   } catch {
     return res.status(500).json({
@@ -320,11 +329,12 @@ export const syncSessionCart = async (req: Request, res: Response): Promise<Resp
       await cartModel.updateMany({ user: userId }, { isActive: false });
       existingSyncedCart.isActive = true;
       await existingSyncedCart.save();
+      const catalogModels = await loadCatalogModels();
 
       return res.status(200).json({
         success: 1,
         message: "session cart was already synced",
-        data: existingSyncedCart,
+        data: withCatalogImagesForCart(existingSyncedCart, catalogModels),
       });
     }
 
@@ -408,11 +418,12 @@ export const syncSessionCart = async (req: Request, res: Response): Promise<Resp
     });
 
     const hydratedCart = await createHydratedCart(userId, syncedCart._id.toString());
+    const catalogModels = await loadCatalogModels();
 
     return res.status(201).json({
       success: 1,
       message: "session cart synced successfully",
-      data: hydratedCart ?? syncedCart,
+      data: withCatalogImagesForCart(hydratedCart ?? syncedCart, catalogModels),
     });
   } catch {
     return res.status(500).json({

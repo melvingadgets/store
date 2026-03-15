@@ -6,6 +6,11 @@ import productModel from "../model/productModel";
 import userModel from "../model/userModel";
 import cloudinary from "../utils/cloudinary";
 import {
+  loadCatalogModels,
+  withCatalogImageForSingleProduct,
+  withCatalogImagesForProducts,
+} from "../utils/catalogImagePresenter";
+import {
   normalizeStorageOptionsInput,
   summarizeStorageOptions,
   validateStorageOptions,
@@ -126,7 +131,7 @@ export const createProduct = async (req: Request, res: Response): Promise<Respon
     return res.status(201).json({
       success: 1,
       message: "product successfully created",
-      data: dataProduct,
+      data: withCatalogImageForSingleProduct(dataProduct, await loadCatalogModels()),
     });
   } catch {
     return res.status(500).json({
@@ -171,7 +176,7 @@ export const updateProductStorageOptions = async (req: Request, res: Response): 
     return res.status(200).json({
       success: 1,
       message: "product storage options updated successfully",
-      data: product,
+      data: withCatalogImageForSingleProduct(product, await loadCatalogModels()),
     });
   } catch {
     return res.status(500).json({
@@ -187,11 +192,12 @@ export const ViewAllProduct = async (_req: Request, res: Response): Promise<Resp
       productStore: productModel,
       limit: 500,
     });
+    const catalogModels = await loadCatalogModels();
 
     return res.status(200).json({
       success: 1,
       message: "products loaded successfully",
-      data: fetchProduct,
+      data: withCatalogImagesForProducts(fetchProduct, catalogModels),
     });
   } catch {
     return res.status(500).json({
@@ -218,7 +224,7 @@ export const ViewSingleProduct = async (req: Request, res: Response): Promise<Re
     return res.status(200).json({
       success: 1,
       message: "product loaded successfully",
-      data: fetchProduct,
+      data: withCatalogImageForSingleProduct(fetchProduct, await loadCatalogModels()),
     });
   } catch {
     return res.status(500).json({

@@ -3,6 +3,7 @@ import cartModel from "../model/cartModel";
 import guestCheckoutModel from "../model/guestCheckoutModel";
 import orderModel from "../model/orderModel";
 import productModel from "../model/productModel";
+import { loadCatalogModels, withCatalogImagesForOrders } from "../utils/catalogImagePresenter";
 import { findStorageOption, normalizeCapacity, summarizeStorageOptions } from "../utils/storageOptions";
 
 const orderPopulation = {
@@ -377,11 +378,12 @@ export const getOrders = async (req: Request, res: Response): Promise<Response> 
       .find({ user: userId })
       .sort({ createdAt: -1 })
       .populate(orderPopulation);
+    const catalogModels = await loadCatalogModels();
 
     return res.status(200).json({
       success: 1,
       message: "orders loaded successfully",
-      data: orders,
+      data: withCatalogImagesForOrders(orders, catalogModels),
     });
   } catch {
     return res.status(500).json({
@@ -479,11 +481,12 @@ export const checkOut = async (req: Request, res: Response): Promise<Response> =
     }
 
     const hydratedOrder = await orderModel.findById(createOrder._id).populate(orderPopulation);
+    const catalogModels = await loadCatalogModels();
 
     return res.status(201).json({
       success: 1,
       message: "order created successfully",
-      data: hydratedOrder ?? createOrder,
+      data: withCatalogImagesForOrders([hydratedOrder ?? createOrder], catalogModels)[0],
     });
   } catch {
     if (reservedInventory.length > 0) {
@@ -557,11 +560,12 @@ export const guestCheckOut = async (req: Request, res: Response): Promise<Respon
     reservedInventory = [];
 
     const hydratedGuestCheckout = await guestCheckoutModel.findById(createGuestCheckout._id).populate(orderPopulation);
+    const catalogModels = await loadCatalogModels();
 
     return res.status(201).json({
       success: 1,
       message: "guest checkout created successfully",
-      data: hydratedGuestCheckout ?? createGuestCheckout,
+      data: withCatalogImagesForOrders([hydratedGuestCheckout ?? createGuestCheckout], catalogModels)[0],
     });
   } catch {
     if (reservedInventory.length > 0) {

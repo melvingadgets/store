@@ -4,6 +4,7 @@ import { RouteObject, createBrowserRouter } from "react-router-dom"
 import { RequireAuth, RequireGuest } from "../component/common/RouteGuards"
 import AppShell from "../layout/AppShell"
 import WebLayout from "../layout/WebLayout"
+import ErrorBoundaryPage from "../pages/ErrorBoundaryPage"
 
 //lazyloading pages
 const Home = lazy(() => import("../pages/Home"))
@@ -32,6 +33,7 @@ const withSuspense = (Component: React.ComponentType)=>(
 const routesConfig: RouteObject[] = [
     {
       element: <AppShell />,
+      errorElement: <ErrorBoundaryPage />,
       children: [
         {
             path: "/",

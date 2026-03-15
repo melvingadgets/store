@@ -5,6 +5,7 @@ const cartModel = require("../dist/model/cartModel").default;
 const guestCheckoutModel = require("../dist/model/guestCheckoutModel").default;
 const orderModel = require("../dist/model/orderModel").default;
 const productModel = require("../dist/model/productModel").default;
+const easyBuyCatalog = require("../dist/utils/easyBuyCatalog");
 const orderController = require("../dist/controller/orderController");
 const {
   createDocument,
@@ -136,7 +137,7 @@ test("checkOut rejects carts when inventory cannot be reserved", async () => {
 });
 
 test("getOrders returns the current user's order history", async () => {
-  const orders = [{ _id: "order-1", bill: 1000 }];
+  const orders = [{ _id: "order-1", bill: 1000, orderItem: undefined }];
   const restoreOrderFind = stubMethod(orderModel, "find", () => ({
     sort() {
       return {
@@ -144,6 +145,7 @@ test("getOrders returns the current user's order history", async () => {
       };
     },
   }));
+  const restoreCatalogFetch = stubMethod(easyBuyCatalog, "fetchPublicEasyBuyCatalog", async () => null);
   const req = createMockRequest({
     params: {},
     user: { _id: "user-1", userName: "Mel", role: "user" },
@@ -157,6 +159,67 @@ test("getOrders returns the current user's order history", async () => {
     assert.deepEqual(res.body.data, orders);
   } finally {
     restoreOrderFind();
+    restoreCatalogFetch();
+  }
+});
+
+test("getOrders prefers EasyBuy catalog images for order products", async () => {
+  const orders = [
+    {
+      _id: "order-1",
+      bill: 900000,
+      orderItem: [
+        {
+          quantity: 1,
+          price: 900000,
+          products: {
+            _id: "product-1",
+            name: "iPhone 15",
+            image: "http://localhost:2222/uploads/phone.png",
+          },
+        },
+      ],
+    },
+  ];
+  const restoreOrderFind = stubMethod(orderModel, "find", () => ({
+    sort() {
+      return {
+        populate: async () => orders,
+      };
+    },
+  }));
+  const restoreCatalogFetch = stubMethod(easyBuyCatalog, "fetchPublicEasyBuyCatalog", async () => ({
+    models: [
+      {
+        model: "iPhone 15",
+        imageUrl: "https://easybuy.example/iphone-15.png",
+        capacities: ["128GB"],
+        allowedPlans: ["Monthly"],
+        downPaymentPercentage: 40,
+        pricesByCapacity: { "128GB": 900000 },
+      },
+    ],
+    planRules: {
+      monthlyDurations: [],
+      weeklyDurations: [],
+      monthlyMarkupMultipliers: {},
+      weeklyMarkupMultipliers: {},
+    },
+  }));
+  const req = createMockRequest({
+    params: {},
+    user: { _id: "user-1", userName: "Mel", role: "user" },
+  });
+  const res = createMockResponse();
+
+  try {
+    await orderController.getOrders(req, res);
+
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.data[0].orderItem[0].products.image, "https://easybuy.example/iphone-15.png");
+  } finally {
+    restoreOrderFind();
+    restoreCatalogFetch();
   }
 });
 
