@@ -74,6 +74,11 @@ test("assistantService reuses an existing session when sessionId is present", as
     messages: [{ role: "assistant", content: "Earlier reply" }],
     toolCalls: [],
     intent: "unknown",
+    context: {
+      productId: "prod-1",
+      productName: "iPhone 15",
+      route: "/product/prod-1",
+    },
   });
   const sessionStore = createSessionStore({ existingSession });
   const providerCalls = [];
@@ -108,6 +113,88 @@ test("assistantService reuses an existing session when sessionId is present", as
   assert.equal(result.kind, "clarifier");
   assert.equal(providerCalls[0].messages[0].content, "Earlier reply");
   assert.equal(existingSession.saveCallCount, 1);
+});
+
+test("assistantService merges persisted session context into the next tool call and refreshes working memory", async () => {
+  const existingSession = createDocument({
+    sessionId: "session-2",
+    messages: [{ role: "assistant", content: "We were discussing that phone." }],
+    toolCalls: [],
+    intent: "product",
+    context: {
+      productId: "prod-9",
+      productName: "iPhone 15 Pro",
+      route: "/product/prod-9",
+    },
+  });
+  const registryCalls = [];
+  let providerTurn = 0;
+  const service = createAssistantService({
+    provider: {
+      run: async () => {
+        providerTurn += 1;
+
+        if (providerTurn === 1) {
+          return {
+            type: "tool_calls",
+            toolCalls: [
+              {
+                id: "tool-1",
+                name: "get_product_pricing_options",
+                arguments: { capacity: "128GB" },
+              },
+            ],
+          };
+        }
+
+        return {
+          type: "final",
+          reply: "Here is the updated pricing.",
+          intent: "product",
+        };
+      },
+    },
+    sessionModel: createSessionStore({ existingSession }).model,
+    registry: {
+      listTools: () => [{ name: "get_product_pricing_options", description: "", parameters: {} }],
+      executeToolCall: async (input) => {
+        registryCalls.push(input);
+        return {
+          ok: true,
+          data: {
+            productId: "prod-9",
+            name: "iPhone 15 Pro",
+            basePrice: 1500000,
+            requestedCapacity: "128GB",
+            requestedCapacityMatch: {
+              capacity: "128GB",
+              price: 1550000,
+              qty: 2,
+            },
+            pricingOptions: [{ capacity: "128GB", price: 1550000, qty: 2 }],
+          },
+        };
+      },
+    },
+  });
+
+  const result = await service.handleMessage({
+    sessionId: "session-2",
+    message: "What about 128GB?",
+    userId: "user-1",
+  });
+
+  assert.equal(result.intent, "product");
+  assert.equal(registryCalls.length, 1);
+  assert.equal(registryCalls[0].name, "get_product_pricing_options");
+  assert.deepEqual(registryCalls[0].arguments, { capacity: "128GB" });
+  assert.equal(registryCalls[0].userContext.productId, "prod-9");
+  assert.equal(registryCalls[0].userContext.productName, "iPhone 15 Pro");
+  assert.equal(registryCalls[0].userContext.route, "/product/prod-9");
+  assert.equal(registryCalls[0].userId, "user-1");
+  assert.equal(existingSession.context.productId, "prod-9");
+  assert.equal(existingSession.context.productName, "iPhone 15 Pro");
+  assert.equal(existingSession.context.productCapacity, "128GB");
 });
 
 test("assistantService creates a new session when the provided sessionId belongs to another user", async () => {
@@ -233,16 +320,128 @@ test("assistantService handles a tool call and persists the result", async () =>
   assert.equal(result.kind, "swap_answer");
   assert.equal(result.confidence, "high");
   assert.deepEqual(result.usedTools, [{ name: "evaluate_swap", ok: true }]);
-  assert.deepEqual(registryCalls, [
-    {
-      name: "evaluate_swap",
-      arguments: { tradeInModel: "iPhone 13" },
-      userContext: { productId: "target-1" },
-      userId: undefined,
-    },
-  ]);
+  assert.equal(registryCalls.length, 1);
+  assert.equal(registryCalls[0].name, "evaluate_swap");
+  assert.deepEqual(registryCalls[0].arguments, { tradeInModel: "iPhone 13" });
+  assert.equal(registryCalls[0].userContext.productId, "target-1");
   assert.equal(sessionStore.state.createdSession.toolCalls.length, 1);
   assert.match(sessionStore.state.createdSession.toolCalls[0].resultSummary, /customerEstimateMin/);
+});
+
+test("assistantService uses remembered swap context to continue the clarifier flow", async () => {
+  const existingSession = createDocument({
+    sessionId: "session-3",
+    messages: [{ role: "assistant", content: "You want to trade in for that phone." }],
+    toolCalls: [],
+    intent: "trade_in",
+    context: {
+      productId: "target-1",
+      tradeInModel: "iPhone 12",
+      route: "/product/target-1",
+    },
+  });
+  const service = createAssistantService({
+    provider: {
+      run: async () => ({
+        type: "final",
+        reply: "Let me continue that swap.",
+        intent: "trade_in",
+      }),
+    },
+    sessionModel: createSessionStore({ existingSession }).model,
+    registry: {
+      listTools: () => [],
+      executeToolCall: async () => ({ ok: false, error: "unused" }),
+    },
+  });
+
+  const result = await service.handleMessage({
+    sessionId: "session-3",
+    message: "Yes",
+    userId: "user-1",
+  });
+
+  assert.equal(result.intent, "trade_in");
+  assert.equal(result.kind, "clarifier");
+  assert.equal(result.reply, "What storage does your current iPhone have?");
+});
+
+test("assistantService routes explicit availability questions directly to product availability checks", async () => {
+  const sessionStore = createSessionStore();
+  let providerCalled = false;
+  const registryCalls = [];
+  const service = createAssistantService({
+    provider: {
+      run: async () => {
+        providerCalled = true;
+        return {
+          type: "final",
+          reply: "unused",
+          intent: "product",
+        };
+      },
+    },
+    sessionModel: sessionStore.model,
+    registry: {
+      listTools: () => [{ name: "check_product_availability", description: "", parameters: {} }],
+      executeToolCall: async (input) => {
+        registryCalls.push(input);
+        return {
+          ok: true,
+          data: {
+            productId: "prod-16",
+            name: "iPhone 16",
+            summary: "iPhone 16 is currently available.",
+          },
+        };
+      },
+    },
+  });
+
+  const result = await service.handleMessage({
+    message: "Is iPhone 16 available?",
+  });
+
+  assert.equal(providerCalled, false);
+  assert.equal(registryCalls.length, 1);
+  assert.equal(registryCalls[0].name, "check_product_availability");
+  assert.deepEqual(registryCalls[0].arguments, { productName: "iPhone 16" });
+  assert.equal(result.intent, "product");
+  assert.equal(result.reply, "iPhone 16 is currently available.");
+});
+
+test("assistantService returns a direct not-found reply for explicit availability checks on missing models", async () => {
+  const sessionStore = createSessionStore();
+  let providerCalled = false;
+  const service = createAssistantService({
+    provider: {
+      run: async () => {
+        providerCalled = true;
+        return {
+          type: "final",
+          reply: "unused",
+          intent: "product",
+        };
+      },
+    },
+    sessionModel: sessionStore.model,
+    registry: {
+      listTools: () => [{ name: "check_product_availability", description: "", parameters: {} }],
+      executeToolCall: async () => ({
+        ok: false,
+        error: "Product not found.",
+      }),
+    },
+  });
+
+  const result = await service.handleMessage({
+    message: "Is iPhone 16 available?",
+  });
+
+  assert.equal(providerCalled, false);
+  assert.equal(result.intent, "product");
+  assert.equal(result.kind, "clarifier");
+  assert.equal(result.reply, "I could not find iPhone 16 in the current catalog.");
 });
 
 test("assistantService supports multiple tool calls before a final reply", async () => {
@@ -288,7 +487,7 @@ test("assistantService supports multiple tool calls before a final reply", async
   });
 
   const result = await service.handleMessage({
-    message: "Do you have an iPhone 15?",
+    message: "Tell me about iPhone 15",
   });
 
   assert.equal(result.intent, "product");

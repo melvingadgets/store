@@ -3,7 +3,14 @@ import { performance } from "perf_hooks";
 import assistantSessionModel from "../model/assistantSessionModel";
 import { createOpenAiProvider } from "./openAiProvider";
 import { getAssistantInstructions } from "./promptLoader";
-import { buildFinalAssistantResponse, createUnsupportedActionResponse, shouldDeclineUnsupportedAction } from "./responsePolicy";
+import { extractExplicitProductName, isAvailabilityQuestion } from "./productQueryRouting";
+import {
+  buildFinalAssistantResponse,
+  createProductNotFoundResponse,
+  createUnsupportedActionResponse,
+  shouldDeclineUnsupportedAction,
+} from "./responsePolicy";
+import { mergeAssistantUserContext, normalizeAssistantUserContext, updateAssistantUserContextFromTool } from "./sessionContext";
 import { recordAssistantTiming } from "./timingTelemetry";
 import { summarizeToolResult, toolRegistry } from "./toolRegistry";
 import type {
@@ -144,7 +151,11 @@ export const createAssistantService = ({
     });
     timing.mark("session_lookup");
     const trimmedMessage = message.trim();
-    const instructions = getAssistantInstructions(userContext);
+    const effectiveUserContext = mergeAssistantUserContext({
+      persisted: normalizeAssistantUserContext((session.context ?? {}) as never),
+      incoming: userContext,
+    });
+    const instructions = getAssistantInstructions(effectiveUserContext);
     const usedTools: Array<{ name: string; ok: boolean }> = [];
     const storedToolCalls: PersistedToolCall[] = [];
 
@@ -156,9 +167,12 @@ export const createAssistantService = ({
     const toolExecutions: Array<{ name: string; ok: boolean; data?: unknown; error?: string }> = [];
 
     session.context = {
-      productId: userContext?.productId ?? "",
-      productName: userContext?.productName ?? "",
-      route: userContext?.route ?? "",
+      productId: effectiveUserContext.productId ?? "",
+      productName: effectiveUserContext.productName ?? "",
+      productCapacity: effectiveUserContext.productCapacity ?? "",
+      route: effectiveUserContext.route ?? "",
+      tradeInModel: effectiveUserContext.tradeInModel ?? "",
+      tradeInStorage: effectiveUserContext.tradeInStorage ?? "",
     };
 
     session.messages.push({
@@ -191,6 +205,111 @@ export const createAssistantService = ({
         return unsupportedResponse;
       }
 
+      const explicitProductName = extractExplicitProductName(trimmedMessage);
+      if (explicitProductName && isAvailabilityQuestion(trimmedMessage)) {
+        const toolCall = {
+          id: "preflight-check-product-availability",
+          name: "check_product_availability",
+          arguments: { productName: explicitProductName },
+        } as const;
+        const toolResult = await registry.executeToolCall({
+          name: toolCall.name,
+          arguments: toolCall.arguments,
+          userContext: effectiveUserContext,
+          userId,
+        });
+        timing.mark("tool_check_product_availability_preflight");
+
+        usedTools.push({
+          name: toolCall.name,
+          ok: toolResult.ok,
+        });
+        toolExecutions.push({
+          name: toolCall.name,
+          ok: toolResult.ok,
+          data: toolResult.data,
+          error: toolResult.error,
+        });
+        storedToolCalls.push({
+          name: toolCall.name,
+          arguments: toolCall.arguments,
+          ok: toolResult.ok,
+          resultSummary: toolResult.ok ? summarizeToolResult(toolResult.data) : "",
+          error: toolResult.ok ? "" : String(toolResult.error ?? "Tool execution failed."),
+          createdAt: new Date(),
+        });
+
+        if (toolResult.ok) {
+          const updatedContext = updateAssistantUserContextFromTool({
+            current: session.context as never,
+            toolCall,
+            toolResult,
+          });
+          session.context = {
+            productId: updatedContext.productId ?? "",
+            productName: updatedContext.productName ?? "",
+            productCapacity: updatedContext.productCapacity ?? "",
+            route: updatedContext.route ?? effectiveUserContext.route ?? "",
+            tradeInModel: updatedContext.tradeInModel ?? "",
+            tradeInStorage: updatedContext.tradeInStorage ?? "",
+          };
+
+          const finalResponse = buildFinalAssistantResponse({
+            sessionId: session.sessionId,
+            message: trimmedMessage,
+            providerReply: "",
+            providerIntent: "product",
+            usedTools,
+            toolExecutions,
+            userContext: {
+              ...effectiveUserContext,
+              productName: updatedContext.productName ?? effectiveUserContext.productName,
+              productId: updatedContext.productId ?? effectiveUserContext.productId,
+            },
+          });
+          session.intent = finalResponse.intent;
+          session.messages.push({
+            role: "assistant",
+            content: finalResponse.reply,
+            createdAt: new Date(),
+          });
+          persistToolCalls(session, storedToolCalls);
+          await session.save();
+          timing.mark("session_save");
+          timing.flush({
+            sessionId: session.sessionId,
+            intent: finalResponse.intent,
+            source: "model",
+            usedTools: usedTools.map((tool) => tool.name),
+          });
+
+          return finalResponse;
+        }
+
+        const notFoundResponse = createProductNotFoundResponse({
+          sessionId: session.sessionId,
+          productName: explicitProductName,
+          usedTools,
+        });
+        session.intent = notFoundResponse.intent;
+        session.messages.push({
+          role: "assistant",
+          content: notFoundResponse.reply,
+          createdAt: new Date(),
+        });
+        persistToolCalls(session, storedToolCalls);
+        await session.save();
+        timing.mark("session_save");
+        timing.flush({
+          sessionId: session.sessionId,
+          intent: notFoundResponse.intent,
+          source: "model",
+          usedTools: usedTools.map((tool) => tool.name),
+        });
+
+        return notFoundResponse;
+      }
+
       const activeProvider = provider ?? createOpenAiProvider();
       timing.mark("provider_ready");
 
@@ -210,7 +329,7 @@ export const createAssistantService = ({
             providerIntent: providerResult.intent,
             usedTools,
             toolExecutions,
-            userContext,
+            userContext: effectiveUserContext,
           });
           session.intent = finalResponse.intent;
           session.messages.push({
@@ -242,7 +361,7 @@ export const createAssistantService = ({
           const toolResult = await registry.executeToolCall({
             name: toolCall.name,
             arguments: toolCall.arguments,
-            userContext,
+            userContext: effectiveUserContext,
             userId,
           });
           timing.mark(`tool_${toolCall.name}`);
@@ -257,6 +376,21 @@ export const createAssistantService = ({
             data: toolResult.data,
             error: toolResult.error,
           });
+          if (toolResult.ok) {
+            const updatedContext = updateAssistantUserContextFromTool({
+              current: session.context as never,
+              toolCall,
+              toolResult,
+            });
+            session.context = {
+              productId: updatedContext.productId ?? "",
+              productName: updatedContext.productName ?? "",
+              productCapacity: updatedContext.productCapacity ?? "",
+              route: updatedContext.route ?? effectiveUserContext.route ?? "",
+              tradeInModel: updatedContext.tradeInModel ?? "",
+              tradeInStorage: updatedContext.tradeInStorage ?? "",
+            };
+          }
           storedToolCalls.push({
             name: toolCall.name,
             arguments: toolCall.arguments,

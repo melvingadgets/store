@@ -17,7 +17,10 @@ export interface AssistantHandoffPayload {
 export interface AssistantUserContext {
   productId?: string;
   productName?: string;
+  productCapacity?: string;
   route?: string;
+  tradeInModel?: string;
+  tradeInStorage?: string;
 }
 
 export interface AssistantSessionMessage {

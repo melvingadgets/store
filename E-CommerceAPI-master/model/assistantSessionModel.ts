@@ -48,7 +48,22 @@ const assistantSessionSchema = new Schema(
         default: "",
         trim: true,
       },
+      productCapacity: {
+        type: String,
+        default: "",
+        trim: true,
+      },
       route: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+      tradeInModel: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+      tradeInStorage: {
         type: String,
         default: "",
         trim: true,

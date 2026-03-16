@@ -43,19 +43,39 @@ const staticPromptSections = PROMPT_FILES.map((fileName) => ({
   content: readPromptFile(fileName),
 })).filter((entry) => entry.content);
 
-const buildRuntimeContext = (userContext?: { productId?: string; productName?: string; route?: string }) =>
+const buildRuntimeContext = (userContext?: {
+  productId?: string;
+  productName?: string;
+  productCapacity?: string;
+  route?: string;
+  tradeInModel?: string;
+  tradeInStorage?: string;
+}) =>
   [
     userContext?.route ? `Current route: ${userContext.route}` : null,
     userContext?.productId ? `Current productId in context: ${userContext.productId}` : null,
     userContext?.productName ? `Current product in context: ${userContext.productName}` : null,
+    userContext?.productCapacity ? `Current capacity in context: ${userContext.productCapacity}` : null,
+    userContext?.tradeInModel ? `Current trade-in model in context: ${userContext.tradeInModel}` : null,
+    userContext?.tradeInStorage ? `Current trade-in storage in context: ${userContext.tradeInStorage}` : null,
     userContext?.productId || userContext?.productName
       ? "If the user gives a short follow-up like a capacity, color, or availability question, treat it as referring to the current product in context unless they clearly switch products."
+      : null,
+    userContext?.tradeInModel || userContext?.tradeInStorage
+      ? "If the user gives a short follow-up about the swap, treat it as continuing the current trade-in details unless they clearly switch devices."
       : null,
   ]
     .filter(Boolean)
     .join("\n");
 
-export const getAssistantInstructions = (userContext?: { productId?: string; productName?: string; route?: string }) => {
+export const getAssistantInstructions = (userContext?: {
+  productId?: string;
+  productName?: string;
+  productCapacity?: string;
+  route?: string;
+  tradeInModel?: string;
+  tradeInStorage?: string;
+}) => {
   const runtimeContext = buildRuntimeContext(userContext);
   const sections = [
     ...staticPromptSections.map((entry) => entry.content),

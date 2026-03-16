@@ -1,3 +1,4 @@
+import { extractExplicitProductName, isAvailabilityQuestion, isExactProductNameMatch } from "./productQueryRouting";
 import { formatNaira } from "./productFoundation";
 import type {
   AssistantConfidence,
@@ -68,7 +69,12 @@ const detectLikelyIntent = ({
     return "trade_in";
   }
 
-  if (usedToolNames.some((name) => PRODUCT_TOOL_NAMES.has(name)) || Boolean(userContext?.productId) || productIntentPattern.test(message)) {
+  if (
+    usedToolNames.some((name) => PRODUCT_TOOL_NAMES.has(name))
+    || Boolean(userContext?.productId)
+    || Boolean(userContext?.productName)
+    || productIntentPattern.test(message)
+  ) {
     return "product";
   }
 
@@ -108,10 +114,12 @@ const asNumber = (value: unknown) => (typeof value === "number" && Number.isFini
 
 const buildProductReply = ({
   execution,
+  message,
   sessionId,
   usedTools,
 }: {
   execution: ToolExecution;
+  message: string;
   sessionId: string;
   usedTools: Array<{ name: string; ok: boolean }>;
 }): AssistantResponsePayload | null => {
@@ -201,6 +209,10 @@ const buildProductReply = ({
 
   if (execution.name === "search_products") {
     const products = asArray(data.products).map((item) => asRecord(item));
+    const explicitProductName = extractExplicitProductName(message);
+    const exactProduct = explicitProductName
+      ? products.find((item) => isExactProductNameMatch(asString(item.name), explicitProductName))
+      : undefined;
     if (!products.length) {
       return createBaseResponse({
         sessionId,
@@ -218,7 +230,16 @@ const buildProductReply = ({
       });
     }
 
-    const first = products[0];
+    if (explicitProductName && !exactProduct && isAvailabilityQuestion(message)) {
+      return createProductNotFoundResponse({
+        sessionId,
+        productName: explicitProductName,
+        usedTools,
+        alternatives: products.map((item) => asString(item.name)).filter(Boolean),
+      });
+    }
+
+    const first = exactProduct ?? products[0];
     return createBaseResponse({
       sessionId,
       reply: `${asString(first.name)} is the closest match I found. It starts at ${formatNaira(asNumber(first.startingPrice))}.`,
@@ -409,6 +430,30 @@ export const createUnsupportedActionResponse = ({
     handoff: createHandoff("This request needs manual help because the assistant does not have a tool for it."),
   });
 
+export const createProductNotFoundResponse = ({
+  sessionId,
+  productName,
+  usedTools,
+  alternatives,
+}: {
+  sessionId: string;
+  productName: string;
+  usedTools: Array<{ name: string; ok: boolean }>;
+  alternatives?: string[];
+}): AssistantResponsePayload =>
+  createBaseResponse({
+    sessionId,
+    reply: alternatives?.length
+      ? `I could not find ${productName} in the current catalog. Closest alternatives I can check are ${alternatives.join(", ")}.`
+      : `I could not find ${productName} in the current catalog.`,
+    intent: "product",
+    usedTools,
+    confidence: "high",
+    kind: "clarifier",
+    quickReplies: alternatives?.slice(0, 3).map((name) => createQuickReply(name)),
+    handoff: null,
+  });
+
 export const shouldDeclineUnsupportedAction = (message: string) => unsupportedActionPattern.test(message);
 
 export const buildFinalAssistantResponse = ({
@@ -452,6 +497,7 @@ export const buildFinalAssistantResponse = ({
   if (productExecution) {
     const reply = buildProductReply({
       execution: productExecution,
+      message,
       sessionId,
       usedTools,
     });
@@ -463,31 +509,35 @@ export const buildFinalAssistantResponse = ({
   if (providerIntent === "trade_in" || likelyIntent === "trade_in") {
     return createBaseResponse({
       sessionId,
-      reply: userContext?.productId
-        ? "What iPhone model are you trading in?"
+      reply: userContext?.tradeInModel
+        ? "What storage does your current iPhone have?"
+        : userContext?.productId
+          ? "What iPhone model are you trading in?"
         : `I need the phone you want to buy first. Contact admin on ${ADMIN_PHONE} if you want manual help now.`,
       intent: "trade_in",
       usedTools,
-      confidence: userContext?.productId ? "medium" : "low",
-      kind: userContext?.productId ? "clarifier" : "handoff",
-      quickReplies: userContext?.productId
-        ? [createQuickReply("iPhone 11"), createQuickReply("iPhone 12"), createQuickReply("iPhone 13")]
+      confidence: userContext?.tradeInModel || userContext?.productId ? "medium" : "low",
+      kind: userContext?.tradeInModel || userContext?.productId ? "clarifier" : "handoff",
+      quickReplies: userContext?.tradeInModel
+        ? [createQuickReply("64GB"), createQuickReply("128GB"), createQuickReply("256GB")]
+        : userContext?.productId
+          ? [createQuickReply("iPhone 11"), createQuickReply("iPhone 12"), createQuickReply("iPhone 13")]
         : undefined,
-      handoff: userContext?.productId ? null : createHandoff("The assistant could not choose a safe swap tool path."),
+      handoff: userContext?.tradeInModel || userContext?.productId ? null : createHandoff("The assistant could not choose a safe swap tool path."),
     });
   }
 
   if (providerIntent === "product" || likelyIntent === "product") {
     return createBaseResponse({
       sessionId,
-      reply: userContext?.productId
+      reply: userContext?.productId || userContext?.productName
         ? "Do you want the price, stock status, or storage options for this phone?"
         : "Which phone model should I check for you?",
       intent: "product",
       usedTools,
       confidence: "medium",
       kind: "clarifier",
-      quickReplies: userContext?.productId
+      quickReplies: userContext?.productId || userContext?.productName
         ? [
             createQuickReply("What is the price?"),
             createQuickReply("Is it in stock?"),
