@@ -31,6 +31,7 @@ const SwapDevice: React.FC = () => {
     return targetStorageOptions.find((option) => option.capacity === requestedCapacity) ?? targetStorageOptions[0]
   }, [requestedCapacity, targetStorageOptions])
   const targetPrice = selectedTargetStorageOption?.price ?? selectedProduct?.price ?? 0
+  const targetPhoneLabel = [selectedProduct?.name, selectedTargetStorageOption?.capacity].filter(Boolean).join(' ')
 
   const [selectedModel, setSelectedModel] = useState('')
   const [selectedStorage, setSelectedStorage] = useState('')
@@ -358,7 +359,7 @@ const SwapDevice: React.FC = () => {
 
             {hasEstimate ? (
               <div className='rounded-[26px] bg-white/58 p-4 shadow-[0_12px_24px_rgba(17,33,62,0.08)]'>
-                <p className='ios-caption uppercase'>Estimated balance to pay</p>
+                <p className='ios-caption uppercase'>{`How much you will add to collect ${targetPhoneLabel}`}</p>
                 <p className='ios-price mt-3 break-words leading-tight'>
                   {`${formatPrice(evaluation.estimatedBalanceMin)} - ${formatPrice(evaluation.estimatedBalanceMax)}`}
                 </p>
@@ -366,7 +367,7 @@ const SwapDevice: React.FC = () => {
                 <div className='mt-4 rounded-[22px] border border-white/55 bg-white/52 px-4 py-3'>
                   <div className='flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between'>
                     <div className='min-w-0'>
-                      <p className='ios-caption uppercase'>Estimated trade-in credit</p>
+                      <p className='ios-caption uppercase'>How much your phone is worth</p>
                     </div>
 
                     <p className='ios-price-inline break-words sm:text-right'>

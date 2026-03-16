@@ -47,6 +47,7 @@ type InternalFaultKey =
   | "bothCamerasFaulty";
 
 const roundCurrency = (value: number) => Math.round(value);
+const CUSTOMER_ESTIMATE_TOLERANCE_RATE = 0.02;
 
 const bodyDeductionByCondition: Record<SwapConditionSelections["overallCondition"], number> = {
   excellent: 0.03,
@@ -207,8 +208,8 @@ const createCustomerEstimateRange = (internalAdjustedResaleValue: number) => {
   const sanitizedInternalValue = Math.max(0, roundCurrency(internalAdjustedResaleValue));
 
   return {
-    customerEstimateMin: roundCurrency(sanitizedInternalValue * 0.95),
-    customerEstimateMax: roundCurrency(sanitizedInternalValue * 1.05),
+    customerEstimateMin: roundCurrency(sanitizedInternalValue * (1 - CUSTOMER_ESTIMATE_TOLERANCE_RATE)),
+    customerEstimateMax: roundCurrency(sanitizedInternalValue * (1 + CUSTOMER_ESTIMATE_TOLERANCE_RATE)),
     internalAdjustedResaleValue: sanitizedInternalValue,
   };
 };

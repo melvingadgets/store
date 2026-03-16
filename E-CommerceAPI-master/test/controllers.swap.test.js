@@ -136,10 +136,10 @@ test("evaluateSwap calculates a swap estimate using catalog-overridden prices", 
       totalDeductionRate: 0.06,
       baseInternalResaleValue: 608,
       internalAdjustedResaleValue: 572,
-      customerEstimateMin: 543,
-      customerEstimateMax: 601,
-      estimatedBalanceMin: 599,
-      estimatedBalanceMax: 657,
+      customerEstimateMin: 561,
+      customerEstimateMax: 583,
+      estimatedBalanceMin: 617,
+      estimatedBalanceMax: 639,
     });
   } finally {
     restoreTargetFind();

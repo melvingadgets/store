@@ -142,6 +142,42 @@ test("addToCart rejects requests when the available stock is exhausted", async (
   }
 });
 
+test("addToCart falls back to product qty when legacy storage option quantities are all zero", async () => {
+  const createdCart = { _id: "cart-legacy", bill: 900000 };
+  const restoreUserFind = stubMethod(userModel, "findById", async () => ({ _id: "user-1" }));
+  const restoreProductFind = stubMethod(productModel, "findById", async () => ({
+    _id: "product-1",
+    price: 900000,
+    qty: 4,
+    storageOptions: [
+      { capacity: "128GB", price: 900000, qty: 0 },
+      { capacity: "256GB", price: 1020000, qty: 0 },
+    ],
+  }));
+  const restoreCartFind = stubMethod(cartModel, "findOne", () => createSortedResult(null));
+  const restoreCartCreate = stubMethod(cartModel, "create", async () => createdCart);
+  const restoreCartFindById = stubMethod(cartModel, "findById", () => createPopulateChain(createdCart));
+  const req = createMockRequest({
+    params: { prodId: "product-1" },
+    body: { capacity: "128GB" },
+    user: { _id: "user-1", userName: "Mel", role: "user" },
+  });
+  const res = createMockResponse();
+
+  try {
+    await cartController.addToCart(req, res);
+
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.data._id, createdCart._id);
+  } finally {
+    restoreUserFind();
+    restoreProductFind();
+    restoreCartFind();
+    restoreCartCreate();
+    restoreCartFindById();
+  }
+});
+
 test("removeCartItem requires a product identifier", async () => {
   const req = createMockRequest({
     params: {},

@@ -60,7 +60,7 @@ test("assistantService creates a new session when sessionId is absent", async ()
   assert.equal(sessionStore.state.createCalls.length, 1);
   assert.equal(result.reply, "How can I help?");
   assert.equal(result.intent, "general");
-  assert.equal(result.kind, "general_answer");
+  assert.equal(result.kind, "clarifier");
   assert.equal(result.confidence, "medium");
   assert.equal(typeof result.sessionId, "string");
   assert.equal(providerCalls.length, 1);
@@ -88,7 +88,7 @@ test("assistantService reuses an existing session when sessionId is present", as
         providerCalls.push(input);
         return {
           type: "final",
-          reply: "Current answer",
+          reply: "Do you want the price, stock status, or storage options for this phone?",
           intent: "product",
         };
       },
@@ -140,7 +140,7 @@ test("assistantService merges persisted session context into the next tool call 
             toolCalls: [
               {
                 id: "tool-1",
-                name: "get_product_pricing_options",
+                name: "check_product_availability",
                 arguments: { capacity: "128GB" },
               },
             ],
@@ -156,7 +156,7 @@ test("assistantService merges persisted session context into the next tool call 
     },
     sessionModel: createSessionStore({ existingSession }).model,
     registry: {
-      listTools: () => [{ name: "get_product_pricing_options", description: "", parameters: {} }],
+      listTools: () => [{ name: "check_product_availability", description: "", parameters: {} }],
       executeToolCall: async (input) => {
         registryCalls.push(input);
         return {
@@ -164,14 +164,13 @@ test("assistantService merges persisted session context into the next tool call 
           data: {
             productId: "prod-9",
             name: "iPhone 15 Pro",
-            basePrice: 1500000,
             requestedCapacity: "128GB",
             requestedCapacityMatch: {
               capacity: "128GB",
               price: 1550000,
               qty: 2,
             },
-            pricingOptions: [{ capacity: "128GB", price: 1550000, qty: 2 }],
+            summary: "iPhone 15 Pro 128GB is currently available.",
           },
         };
       },
@@ -186,7 +185,7 @@ test("assistantService merges persisted session context into the next tool call 
 
   assert.equal(result.intent, "product");
   assert.equal(registryCalls.length, 1);
-  assert.equal(registryCalls[0].name, "get_product_pricing_options");
+  assert.equal(registryCalls[0].name, "check_product_availability");
   assert.deepEqual(registryCalls[0].arguments, { capacity: "128GB" });
   assert.equal(registryCalls[0].userContext.productId, "prod-9");
   assert.equal(registryCalls[0].userContext.productName, "iPhone 15 Pro");
@@ -279,7 +278,7 @@ test("assistantService handles a tool call and persists the result", async () =>
             toolCalls: [
               {
                 id: "tool-1",
-                name: "evaluate_swap",
+                name: "estimate_swap",
                 arguments: { tradeInModel: "iPhone 13" },
               },
             ],
@@ -295,14 +294,19 @@ test("assistantService handles a tool call and persists the result", async () =>
     },
     sessionModel: sessionStore.model,
     registry: {
-      listTools: () => [{ name: "evaluate_swap", description: "", parameters: {} }],
+      listTools: () => [{ name: "estimate_swap", description: "", parameters: {} }],
       executeToolCall: async (input) => {
         registryCalls.push(input);
         return {
           ok: true,
           data: {
+            status: "ready",
             customerEstimateMin: 500,
             customerEstimateMax: 550,
+            collected: {
+              targetProductId: "target-1",
+              tradeInModel: "iPhone 13",
+            },
           },
         };
       },
@@ -319,9 +323,9 @@ test("assistantService handles a tool call and persists the result", async () =>
   assert.equal(result.intent, "trade_in");
   assert.equal(result.kind, "swap_answer");
   assert.equal(result.confidence, "high");
-  assert.deepEqual(result.usedTools, [{ name: "evaluate_swap", ok: true }]);
+  assert.deepEqual(result.usedTools, [{ name: "estimate_swap", ok: true }]);
   assert.equal(registryCalls.length, 1);
-  assert.equal(registryCalls[0].name, "evaluate_swap");
+  assert.equal(registryCalls[0].name, "estimate_swap");
   assert.deepEqual(registryCalls[0].arguments, { tradeInModel: "iPhone 13" });
   assert.equal(registryCalls[0].userContext.productId, "target-1");
   assert.equal(sessionStore.state.createdSession.toolCalls.length, 1);
@@ -344,7 +348,7 @@ test("assistantService uses remembered swap context to continue the clarifier fl
     provider: {
       run: async () => ({
         type: "final",
-        reply: "Let me continue that swap.",
+        reply: "What storage does your current iPhone have?",
         intent: "trade_in",
       }),
     },
@@ -366,17 +370,30 @@ test("assistantService uses remembered swap context to continue the clarifier fl
   assert.equal(result.reply, "What storage does your current iPhone have?");
 });
 
-test("assistantService routes explicit availability questions directly to product availability checks", async () => {
+test("assistantService requires the model to choose product availability tools", async () => {
   const sessionStore = createSessionStore();
-  let providerCalled = false;
+  let providerTurn = 0;
   const registryCalls = [];
   const service = createAssistantService({
     provider: {
       run: async () => {
-        providerCalled = true;
+        providerTurn += 1;
+        if (providerTurn === 1) {
+          return {
+            type: "tool_calls",
+            toolCalls: [
+              {
+                id: "tool-1",
+                name: "check_product_availability",
+                arguments: { productName: "iPhone 16" },
+              },
+            ],
+          };
+        }
+
         return {
           type: "final",
-          reply: "unused",
+          reply: "iPhone 16 is currently available.",
           intent: "product",
         };
       },
@@ -402,7 +419,7 @@ test("assistantService routes explicit availability questions directly to produc
     message: "Is iPhone 16 available?",
   });
 
-  assert.equal(providerCalled, false);
+  assert.equal(providerTurn, 2);
   assert.equal(registryCalls.length, 1);
   assert.equal(registryCalls[0].name, "check_product_availability");
   assert.deepEqual(registryCalls[0].arguments, { productName: "iPhone 16" });
@@ -410,16 +427,39 @@ test("assistantService routes explicit availability questions directly to produc
   assert.equal(result.reply, "iPhone 16 is currently available.");
 });
 
-test("assistantService returns a direct not-found reply for explicit availability checks on missing models", async () => {
+test("assistantService rejects ungrounded product answers and retries through a tool", async () => {
   const sessionStore = createSessionStore();
-  let providerCalled = false;
+  let providerTurn = 0;
+  const registryCalls = [];
   const service = createAssistantService({
     provider: {
       run: async () => {
-        providerCalled = true;
+        providerTurn += 1;
+
+        if (providerTurn === 1) {
+          return {
+            type: "final",
+            reply: "I can't find the iPhone 16 in our current inventory.",
+            intent: "product",
+          };
+        }
+
+        if (providerTurn === 2) {
+          return {
+            type: "tool_calls",
+            toolCalls: [
+              {
+                id: "tool-1",
+                name: "check_product_availability",
+                arguments: { productName: "iPhone 16" },
+              },
+            ],
+          };
+        }
+
         return {
           type: "final",
-          reply: "unused",
+          reply: "I checked the current catalog and I could not find iPhone 16. Contact admin on +2347086758713 if you want manual help.",
           intent: "product",
         };
       },
@@ -427,10 +467,13 @@ test("assistantService returns a direct not-found reply for explicit availabilit
     sessionModel: sessionStore.model,
     registry: {
       listTools: () => [{ name: "check_product_availability", description: "", parameters: {} }],
-      executeToolCall: async () => ({
-        ok: false,
-        error: "Product not found.",
-      }),
+      executeToolCall: async (input) => {
+        registryCalls.push(input);
+        return {
+          ok: false,
+          error: "Product not found.",
+        };
+      },
     },
   });
 
@@ -438,10 +481,11 @@ test("assistantService returns a direct not-found reply for explicit availabilit
     message: "Is iPhone 16 available?",
   });
 
-  assert.equal(providerCalled, false);
+  assert.equal(providerTurn, 3);
+  assert.equal(registryCalls.length, 1);
   assert.equal(result.intent, "product");
-  assert.equal(result.kind, "clarifier");
-  assert.equal(result.reply, "I could not find iPhone 16 in the current catalog.");
+  assert.equal(result.kind, "handoff");
+  assert.match(result.reply, /could not find iPhone 16/i);
 });
 
 test("assistantService supports multiple tool calls before a final reply", async () => {

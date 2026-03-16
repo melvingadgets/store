@@ -57,7 +57,25 @@ const ProductDetails = () => {
   const fallbackDisplayPrice = selectedStorageOption?.price ?? selectedProduct?.price ?? 0
   const displayPrice = selectedProduct ? fallbackDisplayPrice : 0
   const displayImage = selectedProduct?.image ?? ""
-  const availableStock = selectedStorageOption?.qty ?? selectedProduct?.qty ?? 0
+  const availableStock = useMemo(() => {
+    if (!selectedStorageOption) {
+      return selectedProduct?.qty ?? 0
+    }
+
+    if ((selectedStorageOption.qty ?? 0) > 0) {
+      return selectedStorageOption.qty
+    }
+
+    const allStorageQtyZero =
+      storageOptions.length > 0 &&
+      storageOptions.every((option) => (option.qty ?? 0) < 1)
+
+    if (allStorageQtyZero && (selectedProduct?.qty ?? 0) > 0) {
+      return selectedProduct?.qty ?? 0
+    }
+
+    return selectedStorageOption.qty ?? selectedProduct?.qty ?? 0
+  }, [selectedProduct?.qty, selectedStorageOption, storageOptions])
   const isOutOfStock = availableStock < 1
 
   const ensureActionReady = () => {

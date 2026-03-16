@@ -56,13 +56,19 @@ export interface AssistantResponsePayload {
   handoff?: AssistantHandoffPayload | null;
 }
 
-export interface AssistantToolDefinition {
+export type AssistantCapabilitySource = "backend_service" | "backend_endpoint" | "mcp";
+
+export interface AssistantCapabilityDefinition {
   name: string;
   description: string;
+  source: AssistantCapabilitySource;
+  intentTags: AssistantIntent[];
   parameters: Record<string, unknown>;
+  endpoint?: string;
+  mcpServer?: string;
 }
 
-export interface AssistantToolCall {
+export interface AssistantCapabilityCall {
   id: string;
   name: string;
   arguments: Record<string, unknown>;
@@ -72,30 +78,66 @@ export type AssistantProviderItem = Record<string, unknown>;
 
 export type AssistantRuntimeMessage =
   | { role: "system" | "user"; content: string }
-  | { role: "assistant"; content: string | null; toolCalls?: AssistantToolCall[] }
+  | { role: "assistant"; content: string | null; toolCalls?: AssistantCapabilityCall[] }
   | { role: "tool"; content: string; toolCallId: string; name: string }
   | { role: "provider"; items: AssistantProviderItem[] };
 
 export type AssistantProviderResult =
   | { type: "final"; reply: string; intent: AssistantIntent }
-  | { type: "tool_calls"; toolCalls: AssistantToolCall[]; responseItems?: AssistantProviderItem[] };
+  | { type: "tool_calls"; toolCalls: AssistantCapabilityCall[]; responseItems?: AssistantProviderItem[] };
 
 export interface AssistantProvider {
   run(input: {
     instructions?: string;
     messages: AssistantRuntimeMessage[];
-    tools: AssistantToolDefinition[];
+    tools: AssistantCapabilityDefinition[];
   }): Promise<AssistantProviderResult>;
 }
 
-export interface AssistantToolResult {
+export interface AssistantCapabilityResult {
   ok: boolean;
   data?: unknown;
   error?: string;
 }
 
+export interface AssistantCapability {
+  name: string;
+  description: string;
+  source: AssistantCapabilitySource;
+  intentTags: AssistantIntent[];
+  parameters: Record<string, unknown>;
+  endpoint?: string;
+  mcpServer?: string;
+  execute(input: {
+    arguments: Record<string, unknown>;
+    userContext?: AssistantUserContext;
+    userId?: string;
+  }): Promise<AssistantCapabilityResult>;
+}
+
+export interface AssistantCapabilityRegistry {
+  listCapabilities(): AssistantCapabilityDefinition[];
+  executeCapability(input: {
+    name: string;
+    arguments: Record<string, unknown>;
+    userContext?: AssistantUserContext;
+    userId?: string;
+  }): Promise<AssistantCapabilityResult>;
+}
+
+export type AssistantToolDefinition = AssistantCapabilityDefinition;
+export type AssistantToolCall = AssistantCapabilityCall;
+export type AssistantToolResult = AssistantCapabilityResult;
+
 export interface AssistantToolRegistry {
+  listCapabilities(): AssistantCapabilityDefinition[];
   listTools(): AssistantToolDefinition[];
+  executeCapability(input: {
+    name: string;
+    arguments: Record<string, unknown>;
+    userContext?: AssistantUserContext;
+    userId?: string;
+  }): Promise<AssistantToolResult>;
   executeToolCall(input: {
     name: string;
     arguments: Record<string, unknown>;

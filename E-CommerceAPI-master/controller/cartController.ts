@@ -47,6 +47,32 @@ const findCartItemIndex = (
       normalizeCapacity(item.capacity) === normalizeCapacity(capacity),
   );
 
+const resolveSelectionQuantity = (
+  product: {
+    qty?: unknown;
+    storageOptions?: Array<{ qty?: unknown }>;
+  },
+  selectedStorageOption: { qty?: unknown },
+) => {
+  const selectedOptionQty = Number(selectedStorageOption.qty ?? 0);
+
+  if (selectedOptionQty > 0) {
+    return selectedOptionQty;
+  }
+
+  const productQty = Number(product.qty ?? 0);
+  const allStorageQtyZero =
+    Array.isArray(product.storageOptions) &&
+    product.storageOptions.length > 0 &&
+    product.storageOptions.every((option) => Number(option.qty ?? 0) < 1);
+
+  if (productQty > 0 && allStorageQtyZero) {
+    return productQty;
+  }
+
+  return selectedOptionQty;
+};
+
 const resolveProductSelection = (
   product: {
     price?: number;
@@ -87,7 +113,7 @@ const resolveProductSelection = (
     success: true as const,
     capacity: normalizedCapacity,
     price: Number(selectedStorageOption.price ?? 0),
-    availableQuantity: Number(selectedStorageOption.qty ?? 0),
+    availableQuantity: resolveSelectionQuantity(product, selectedStorageOption),
   };
 };
 

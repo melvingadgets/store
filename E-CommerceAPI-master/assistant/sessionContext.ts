@@ -59,7 +59,7 @@ export const updateAssistantUserContextFromTool = ({
     return next;
   }
 
-  if (toolCall.name === "get_product_pricing_options" || toolCall.name === "check_product_availability") {
+  if (toolCall.name === "check_product_availability") {
     const requestedCapacityMatch = asRecord(data.requestedCapacityMatch);
     assignIfPresent(next, "productId", data.productId ?? args.productId);
     assignIfPresent(next, "productName", data.name ?? args.productName);
@@ -74,36 +74,12 @@ export const updateAssistantUserContextFromTool = ({
     return next;
   }
 
-  if (toolCall.name === "find_best_match_product") {
-    const firstResult = asRecord(asArray(data.results)[0]);
-    assignIfPresent(next, "productId", firstResult.productId);
-    assignIfPresent(next, "productName", firstResult.name);
-    assignIfPresent(next, "productCapacity", args.preferredCapacity);
-    return next;
-  }
-
-  if (toolCall.name === "compare_products") {
-    const firstProduct = asRecord(asArray(data.products)[0]);
-    assignIfPresent(next, "productId", firstProduct.productId ?? args.primaryProductId);
-    assignIfPresent(next, "productName", firstProduct.name ?? args.primaryProductName);
-    return next;
-  }
-
-  if (
-    toolCall.name === "evaluate_swap"
-    || toolCall.name === "estimate_swap_from_partial_info"
-    || toolCall.name === "explain_swap_result"
-  ) {
+  if (toolCall.name === "estimate_swap") {
     const collected = asRecord(data.collected);
     assignIfPresent(next, "productId", args.targetProductId ?? collected.targetProductId ?? current?.productId);
     assignIfPresent(next, "productCapacity", args.targetCapacity);
     assignIfPresent(next, "tradeInModel", args.tradeInModel ?? collected.tradeInModel);
     assignIfPresent(next, "tradeInStorage", args.tradeInStorage ?? collected.tradeInStorage);
-    return next;
-  }
-
-  if (toolCall.name === "get_swap_eligible_models") {
-    assignIfPresent(next, "tradeInModel", data.model ?? args.model);
     return next;
   }
 

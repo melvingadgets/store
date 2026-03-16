@@ -16,11 +16,7 @@ const parseFinalAssistantReply = (content: string | null | undefined): Assistant
   const rawContent = String(content ?? "").trim();
 
   if (!rawContent) {
-    return {
-      type: "final",
-      reply: "I could not generate a reply right now.",
-      intent: "unknown",
-    };
+    throw new Error("AI provider returned an empty reply");
   }
 
   try {
