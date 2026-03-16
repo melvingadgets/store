@@ -1,4 +1,18 @@
 export type AssistantIntent = "trade_in" | "product" | "general" | "unknown";
+export type AssistantConfidence = "high" | "medium" | "low";
+export type AssistantResponseKind = "product_answer" | "swap_answer" | "clarifier" | "handoff" | "general_answer";
+
+export interface AssistantQuickReply {
+  label: string;
+  message: string;
+}
+
+export interface AssistantHandoffPayload {
+  title: string;
+  reason: string;
+  contactLabel: string;
+  contactValue: string;
+}
 
 export interface AssistantUserContext {
   productId?: string;
@@ -33,6 +47,10 @@ export interface AssistantResponsePayload {
   reply: string;
   intent: AssistantIntent;
   usedTools: Array<{ name: string; ok: boolean }>;
+  confidence: AssistantConfidence;
+  kind: AssistantResponseKind;
+  quickReplies?: AssistantQuickReply[];
+  handoff?: AssistantHandoffPayload | null;
 }
 
 export interface AssistantToolDefinition {

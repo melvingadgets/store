@@ -156,6 +156,10 @@ test("assistantRouter exposes a public assistant message endpoint", () => {
     "verifyToken",
     "assistantMessage",
   ]);
+  assert.deepEqual(getRouteHandlerNames(assistantRouter, "/assistant/message/stream", "post"), [
+    "verifyToken",
+    "assistantMessageStream",
+  ]);
   assert.deepEqual(getRouteHandlerNames(assistantRouter, "/assistant/admin/timings", "get"), [
     "verifyToken",
     "requireAdmin",

@@ -3,6 +3,7 @@ import { performance } from "perf_hooks";
 import assistantSessionModel from "../model/assistantSessionModel";
 import { createOpenAiProvider } from "./openAiProvider";
 import { getAssistantInstructions } from "./promptLoader";
+import { buildFinalAssistantResponse, createUnsupportedActionResponse, shouldDeclineUnsupportedAction } from "./responsePolicy";
 import { recordAssistantTiming } from "./timingTelemetry";
 import { summarizeToolResult, toolRegistry } from "./toolRegistry";
 import type {
@@ -15,9 +16,9 @@ import type {
 } from "./assistantTypes";
 
 const MAX_TOOL_TURNS = 4;
-const MAX_HISTORY_MESSAGES = 6;
+const MAX_HISTORY_MESSAGES = 10;
 const MAX_MESSAGE_CONTENT_LENGTH = 320;
-const FALLBACK_REPLY = "I'm having trouble answering that right now. Please try again in a moment.";
+const FALLBACK_HANDOFF_REPLY = "I can't answer that confidently right now. Contact admin on +2347086758713.";
 
 type PersistedToolCall = {
   name: string;
@@ -152,6 +153,13 @@ export const createAssistantService = ({
       ...history,
       { role: "user", content: compactMessageContent(trimmedMessage) },
     ];
+    const toolExecutions: Array<{ name: string; ok: boolean; data?: unknown; error?: string }> = [];
+
+    session.context = {
+      productId: userContext?.productId ?? "",
+      productName: userContext?.productName ?? "",
+      route: userContext?.route ?? "",
+    };
 
     session.messages.push({
       role: "user",
@@ -160,6 +168,29 @@ export const createAssistantService = ({
     });
 
     try {
+      if (shouldDeclineUnsupportedAction(trimmedMessage)) {
+        const unsupportedResponse = createUnsupportedActionResponse({
+          sessionId: session.sessionId,
+          usedTools,
+        });
+        session.intent = unsupportedResponse.intent;
+        session.messages.push({
+          role: "assistant",
+          content: unsupportedResponse.reply,
+          createdAt: new Date(),
+        });
+        await session.save();
+        timing.mark("session_save");
+        timing.flush({
+          sessionId: session.sessionId,
+          intent: unsupportedResponse.intent,
+          source: "model",
+          usedTools: [],
+        });
+
+        return unsupportedResponse;
+      }
+
       const activeProvider = provider ?? createOpenAiProvider();
       timing.mark("provider_ready");
 
@@ -172,10 +203,19 @@ export const createAssistantService = ({
         timing.mark(`provider_turn_${turn + 1}`);
 
         if (providerResult.type === "final") {
-          session.intent = providerResult.intent;
+          const finalResponse = buildFinalAssistantResponse({
+            sessionId: session.sessionId,
+            message: trimmedMessage,
+            providerReply: providerResult.reply,
+            providerIntent: providerResult.intent,
+            usedTools,
+            toolExecutions,
+            userContext,
+          });
+          session.intent = finalResponse.intent;
           session.messages.push({
             role: "assistant",
-            content: providerResult.reply,
+            content: finalResponse.reply,
             createdAt: new Date(),
           });
           persistToolCalls(session, storedToolCalls);
@@ -183,17 +223,12 @@ export const createAssistantService = ({
           timing.mark("session_save");
           timing.flush({
             sessionId: session.sessionId,
-            intent: providerResult.intent,
+            intent: finalResponse.intent,
             source: "model",
             usedTools: usedTools.map((tool) => tool.name),
           });
 
-          return {
-            sessionId: session.sessionId,
-            reply: providerResult.reply,
-            intent: providerResult.intent,
-            usedTools,
-          };
+          return finalResponse;
         }
 
         if (providerResult.responseItems?.length) {
@@ -216,6 +251,12 @@ export const createAssistantService = ({
             name: toolCall.name,
             ok: toolResult.ok,
           });
+          toolExecutions.push({
+            name: toolCall.name,
+            ok: toolResult.ok,
+            data: toolResult.data,
+            error: toolResult.error,
+          });
           storedToolCalls.push({
             name: toolCall.name,
             arguments: toolCall.arguments,
@@ -236,7 +277,7 @@ export const createAssistantService = ({
 
       session.messages.push({
         role: "assistant",
-        content: FALLBACK_REPLY,
+        content: FALLBACK_HANDOFF_REPLY,
         createdAt: new Date(),
       });
       persistToolCalls(session, storedToolCalls);
@@ -251,14 +292,23 @@ export const createAssistantService = ({
 
       return {
         sessionId: session.sessionId,
-        reply: FALLBACK_REPLY,
+        reply: FALLBACK_HANDOFF_REPLY,
         intent: session.intent ?? "unknown",
         usedTools,
+        confidence: "low",
+        kind: "handoff",
+        quickReplies: undefined,
+        handoff: {
+          title: "Contact admin",
+          reason: "The assistant could not complete this safely.",
+          contactLabel: "Admin",
+          contactValue: "+2347086758713",
+        },
       };
     } catch {
       session.messages.push({
         role: "assistant",
-        content: FALLBACK_REPLY,
+        content: FALLBACK_HANDOFF_REPLY,
         createdAt: new Date(),
       });
       persistToolCalls(session, storedToolCalls);
@@ -273,9 +323,18 @@ export const createAssistantService = ({
 
       return {
         sessionId: session.sessionId,
-        reply: FALLBACK_REPLY,
+        reply: FALLBACK_HANDOFF_REPLY,
         intent: session.intent ?? "unknown",
         usedTools,
+        confidence: "low",
+        kind: "handoff",
+        quickReplies: undefined,
+        handoff: {
+          title: "Contact admin",
+          reason: "The assistant could not complete this safely.",
+          contactLabel: "Admin",
+          contactValue: "+2347086758713",
+        },
       };
     }
   },

@@ -587,21 +587,19 @@
   }
 
   .assistant-messages-viewport {
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    max-height: 20rem;
-    min-height: 11rem;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
     scroll-padding-bottom: 0.5rem;
+    touch-action: pan-y;
   }
 
   .assistant-messages-stack {
     display: flex;
     min-height: 100%;
     flex-direction: column;
-    justify-content: flex-end;
     gap: 0.5rem;
   }
 

@@ -33,6 +33,10 @@ test("assistantMessage delegates to the assistant service and returns the respon
       reply: "Here is the answer.",
       intent: "product",
       usedTools: [{ name: "get_product_details", ok: true }],
+      confidence: "high",
+      kind: "product_answer",
+      quickReplies: [{ label: "Check stock", message: "Check stock" }],
+      handoff: null,
     }),
   );
   const req = createMockRequest({
@@ -60,6 +64,10 @@ test("assistantMessage delegates to the assistant service and returns the respon
       reply: "Here is the answer.",
       intent: "product",
       usedTools: [{ name: "get_product_details", ok: true }],
+      confidence: "high",
+      kind: "product_answer",
+      quickReplies: [{ label: "Check stock", message: "Check stock" }],
+      handoff: null,
     });
   } finally {
     restoreHandleMessage();

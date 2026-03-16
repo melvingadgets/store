@@ -60,6 +60,8 @@ test("assistantService creates a new session when sessionId is absent", async ()
   assert.equal(sessionStore.state.createCalls.length, 1);
   assert.equal(result.reply, "How can I help?");
   assert.equal(result.intent, "general");
+  assert.equal(result.kind, "general_answer");
+  assert.equal(result.confidence, "medium");
   assert.equal(typeof result.sessionId, "string");
   assert.equal(providerCalls.length, 1);
   assert.equal(sessionStore.state.createdSession.messages.length, 2);
@@ -103,6 +105,7 @@ test("assistantService reuses an existing session when sessionId is present", as
   assert.equal(sessionStore.state.createCalls.length, 0);
   assert.equal(result.sessionId, "session-1");
   assert.equal(result.intent, "product");
+  assert.equal(result.kind, "clarifier");
   assert.equal(providerCalls[0].messages[0].content, "Earlier reply");
   assert.equal(existingSession.saveCallCount, 1);
 });
@@ -227,6 +230,8 @@ test("assistantService handles a tool call and persists the result", async () =>
   });
 
   assert.equal(result.intent, "trade_in");
+  assert.equal(result.kind, "swap_answer");
+  assert.equal(result.confidence, "high");
   assert.deepEqual(result.usedTools, [{ name: "evaluate_swap", ok: true }]);
   assert.deepEqual(registryCalls, [
     {
@@ -287,6 +292,7 @@ test("assistantService supports multiple tool calls before a final reply", async
   });
 
   assert.equal(result.intent, "product");
+  assert.equal(result.kind, "product_answer");
   assert.deepEqual(toolNames, ["search_products", "get_product_details"]);
   assert.deepEqual(result.usedTools, [
     { name: "search_products", ok: true },
@@ -316,9 +322,11 @@ test("assistantService returns a fallback reply when the provider fails", async 
 
   assert.equal(
     result.reply,
-    "I'm having trouble answering that right now. Please try again in a moment.",
+    "I can't answer that confidently right now. Contact admin on +2347086758713.",
   );
   assert.equal(result.intent, "unknown");
+  assert.equal(result.kind, "handoff");
+  assert.equal(result.confidence, "low");
   assert.equal(sessionStore.state.createdSession.messages.at(-1).content, result.reply);
   assert.equal(sessionStore.state.createdSession.saveCallCount, 1);
 });

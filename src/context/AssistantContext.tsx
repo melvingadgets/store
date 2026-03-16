@@ -1,11 +1,23 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { setFrontEndFrozen } from '../lib/frontEndFreeze'
-import type { AssistantIntent, SwapConditionSelections } from '../types/domain'
+import type {
+  AssistantConfidence,
+  AssistantHandoffPayload,
+  AssistantIntent,
+  AssistantQuickReply,
+  AssistantResponseKind,
+  SwapConditionSelections,
+} from '../types/domain'
 
 export interface AssistantMessage {
   id: string
   role: 'assistant' | 'user'
   text: string
+  confidence?: AssistantConfidence
+  kind?: AssistantResponseKind
+  quickReplies?: AssistantQuickReply[]
+  handoff?: AssistantHandoffPayload | null
+  isStreaming?: boolean
 }
 
 export interface AssistantTradeInDraft extends Partial<SwapConditionSelections> {
@@ -21,8 +33,10 @@ interface AssistantContextValue {
   sessionId: string | null
   setOpen: (value: boolean) => void
   toggleOpen: () => void
-  pushAssistantMessage: (text: string) => void
-  pushUserMessage: (text: string) => void
+  pushAssistantMessage: (message: Omit<AssistantMessage, 'id' | 'role'> & { text: string }) => string
+  pushUserMessage: (text: string) => string
+  patchMessage: (messageId: string, patch: Partial<Omit<AssistantMessage, 'id' | 'role'>>) => void
+  appendMessageText: (messageId: string, text: string) => void
   setIntent: (intent: AssistantIntent | null) => void
   setSessionId: (sessionId: string | null) => void
   mergeTradeInDraft: (draft: Partial<AssistantTradeInDraft>) => void
@@ -37,6 +51,9 @@ const createWelcomeMessage = (): AssistantMessage => ({
   id: createId(),
   role: 'assistant',
   text: 'Hi. I can help with trade-ins and product questions.',
+  confidence: 'high',
+  kind: 'general_answer',
+  handoff: null,
 })
 
 const AssistantContext = createContext<AssistantContextValue | null>(null)
@@ -90,20 +107,16 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setFrontEndFrozen(isOpen)
 
     const previousBodyOverflow = document.body.style.overflow
-    const previousBodyTouchAction = document.body.style.touchAction
 
     if (isOpen) {
       document.body.style.overflow = 'hidden'
-      document.body.style.touchAction = 'none'
     } else {
       document.body.style.overflow = previousBodyOverflow
-      document.body.style.touchAction = previousBodyTouchAction
     }
 
     return () => {
       setFrontEndFrozen(false)
       document.body.style.overflow = previousBodyOverflow
-      document.body.style.touchAction = previousBodyTouchAction
     }
   }, [isOpen])
 
@@ -115,10 +128,24 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     sessionId,
     setOpen: setIsOpen,
     toggleOpen: () => setIsOpen((current) => !current),
-    pushAssistantMessage: (text: string) =>
-      setMessages((current) => [...current, { id: createId(), role: 'assistant', text }]),
-    pushUserMessage: (text: string) =>
-      setMessages((current) => [...current, { id: createId(), role: 'user', text }]),
+    pushAssistantMessage: (message) => {
+      const id = createId()
+      setMessages((current) => [...current, { id, role: 'assistant', handoff: null, ...message }])
+      return id
+    },
+    pushUserMessage: (text: string) => {
+      const id = createId()
+      setMessages((current) => [...current, { id, role: 'user', text }])
+      return id
+    },
+    patchMessage: (messageId, patch) =>
+      setMessages((current) =>
+        current.map((message) => (message.id === messageId ? { ...message, ...patch } : message)),
+      ),
+    appendMessageText: (messageId, text) =>
+      setMessages((current) =>
+        current.map((message) => (message.id === messageId ? { ...message, text: `${message.text}${text}` } : message)),
+      ),
     setIntent,
     setSessionId,
     mergeTradeInDraft: (draft) => setTradeInDraft((current) => ({ ...current, ...draft })),
