@@ -25,6 +25,11 @@ export const beginGlobalLoad = () => {
   }
 }
 
+export const resetGlobalLoad = () => {
+  pendingCount = 0
+  notify()
+}
+
 const subscribe = (listener: Listener) => {
   listeners.add(listener)
   return () => listeners.delete(listener)

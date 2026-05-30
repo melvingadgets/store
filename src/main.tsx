@@ -6,7 +6,8 @@ import "react-toastify/dist/ReactToastify.css";
 import './index.css'
 import { router } from './routes/AllRoutes';
 import { Provider } from 'react-redux';
-import { store } from './redux/store';
+import { store, persistor } from './redux/store';
+import { PersistGate } from 'redux-persist/integration/react';
 import { setApiClientAuthTokenResolver } from './utils/axios';
 
 setApiClientAuthTokenResolver(() => store.getState().auth.token)
@@ -14,8 +15,10 @@ setApiClientAuthTokenResolver(() => store.getState().auth.token)
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
    <Provider store={store}>
-      <ToastContainer position='top-right' transition={Zoom} autoClose={2000}/>
-      <RouterProvider router={router}/>
+      <PersistGate loading={null} persistor={persistor}>
+        <ToastContainer position='top-right' transition={Zoom} autoClose={2000}/>
+        <RouterProvider router={router}/>
+      </PersistGate>
    </Provider>
   </StrictMode>,
 )

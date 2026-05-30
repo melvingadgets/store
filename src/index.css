@@ -97,10 +97,19 @@
   }
 }
 
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 0.3; }
+}
+
 @layer utilities {
   .loader-grow-size {
     animation: loader-grow-size 1.6s ease-in-out infinite;
     transform-origin: center;
+  }
+
+  .skeleton-pulse {
+    animation: skeleton-pulse 1.8s ease-in-out infinite;
   }
 }
 

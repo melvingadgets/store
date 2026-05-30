@@ -1,11 +1,15 @@
 /* eslint-disable react-refresh/only-export-components */
-import React, { Suspense, lazy } from "react"
-import { RouteObject, createBrowserRouter } from "react-router-dom"
+import React, { Suspense, lazy, useLayoutEffect } from "react"
+import { Navigate, RouteObject, createBrowserRouter } from "react-router-dom"
 import { RequireAuth, RequireGuest } from "../component/common/RouteGuards"
+import { isNewSwapEnabled } from "../lib/featureFlags"
 import AppShell from "../layout/AppShell"
+import SwapShell from "../layout/SwapShell"
 import WebLayout from "../layout/WebLayout"
 import ErrorBoundaryPage from "../pages/ErrorBoundaryPage"
 import NotFoundPage from "../pages/NotFoundPage"
+import { beginGlobalLoad } from "../lib/globalLoading"
+
 
 //lazyloading pages
 const Home = lazy(() => import("../pages/Home"))
@@ -20,19 +24,27 @@ const Account = lazy(() => import("../pages/Account"))
 const Admin = lazy(() => import("../pages/Admin"))
 const AdminSessions = lazy(() => import("../pages/AdminSessions"))
 const SwapDevice = lazy(() => import("../pages/SwapDevice"))
+const SwapPage = lazy(() => import("../pages/SwapPage"))
 // const Fakeproduct = lazy(() => import("../loginFake/Productss"))
 const Checkout = lazy(() => import("../pages/Checkout"))
 const OrderConfirmation = lazy(() => import("../pages/OrderConfirmation"))
 
+const PageTransitionLoadingTrigger = () => {
+  useLayoutEffect(() => {
+    const endLoad = beginGlobalLoad()
+    return () => endLoad()
+  }, [])
+  return null
+}
+
 //higher order component to wrap lazy component in suspense
 const withSuspense = (Component: React.ComponentType)=>(
-    <Suspense fallback={null}>
+    <Suspense fallback={<PageTransitionLoadingTrigger />}>
         <Component />
     </Suspense>
 )
 
-//routes configuration
-const routesConfig: RouteObject[] = [
+const fullAppRoutes: RouteObject[] = [
     {
       element: <AppShell />,
       errorElement: <ErrorBoundaryPage />,
@@ -77,5 +89,17 @@ const routesConfig: RouteObject[] = [
 //   { path: "/product/mycart", element: withSuspense(MyCart) },
 ]
 
-//export router
-export const router = createBrowserRouter(routesConfig)
+const swapOnlyRoutes: RouteObject[] = [
+    {
+      element: <SwapShell />,
+      errorElement: <ErrorBoundaryPage />,
+      children: [
+        { path: "/swap", element: withSuspense(SwapPage) },
+        { path: "*", element: <Navigate to="/swap" replace /> },
+      ],
+    },
+]
+
+export const router = createBrowserRouter(
+  isNewSwapEnabled() ? swapOnlyRoutes : fullAppRoutes
+)

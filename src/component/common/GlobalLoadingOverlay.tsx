@@ -65,13 +65,13 @@ const GlobalLoadingOverlay = ({ minDurationMs = 150 }: GlobalLoadingOverlayProps
         visible && !frontEndFrozen ? "opacity-100" : "opacity-0"
       }`}
     >
-      <div className="rounded-full border border-white/60 bg-white/85 p-5 shadow-[0_24px_56px_rgba(17,33,62,0.16)] backdrop-blur-md">
-        <div className="relative h-[7.5rem] w-[7.5rem]">
-          <BounceLoader color="#0b74bc" size={120} speedMultiplier={0.75} aria-label="Loading spinner" />
+      <div className="rounded-full border border-white/60 bg-white/85 p-3 shadow-[0_24px_56px_rgba(17,33,62,0.16)] backdrop-blur-md">
+        <div className="relative h-10 w-10 loader-grow-size">
+          <BounceLoader color="#0b74bc" size={40} speedMultiplier={0.75} aria-label="Loading spinner" />
           <img
             src={loaderImage}
             alt="Loader"
-            className="absolute left-1/2 top-1/2 h-[4.5rem] w-[4.5rem] -translate-x-1/2 -translate-y-1/2 rounded-full object-cover"
+            className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full object-cover"
           />
         </div>
       </div>

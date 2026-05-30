@@ -1,0 +1,188 @@
+SWAP PAGE REDESIGN PLAN — GATED LAUNCH
+=======================================
+
+
+CONTEXT
+-------
+The app is launching in phases:
+  Phase 1: Users only see a standalone swap/trade-in tool behind a minimal
+           branded shell. No other pages are accessible.
+  Phase 2: Flip a flag and open the full e-commerce experience.
+
+This plan builds the new /swap page and the gating mechanism.
+The old swap page (/product/:id/swap) stays intact for Phase 2.
+
+
+HOW THE FEATURE FLAG WORKS
+--------------------------
+Flag ON (Phase 1 — swap-only mode):
+  - The entire app shows ONLY the /swap page
+  - ALL other routes (home, products, cart, login, admin, etc.) redirect to /swap
+  - Minimal app shell: header with store logo/name, no nav links
+  - The old swap page still exists in code but is unreachable
+
+Flag OFF (Phase 2 — full e-commerce):
+  - Full app works normally — all routes, full nav, full footer
+  - "Swap old device" button on ProductDetails goes to old /product/:id/swap
+  - The new /swap page is NOT registered — it does not exist in the route tree
+
+
+STEP 1: Extract ConditionSelector into shared component
+--------------------------------------------------------
+Why: Both old SwapDevice.tsx and new SwapPage.tsx need this component.
+
+- CREATE src/component/swap/ConditionSelector.tsx
+  Move ConditionSelector and getConditionSummaryLabel out of SwapDevice.tsx.
+
+- MODIFY src/pages/SwapDevice.tsx
+  Remove inline definitions, import from the new file. No behavior change.
+
+
+STEP 2: Feature flag + env setup
+---------------------------------
+- CREATE src/lib/featureFlags.ts
+  isNewSwapEnabled() reads VITE_ENABLE_NEW_SWAP env variable.
+
+- MODIFY src/vite-env.d.ts
+  Add type declarations for VITE_ENABLE_NEW_SWAP and VITE_WHATSAPP_PHONE.
+
+- MODIFY .env and .env.example
+  Add:
+    VITE_ENABLE_NEW_SWAP=true
+    VITE_WHATSAPP_PHONE=234XXXXXXXXXX
+
+
+STEP 3: WhatsApp message utility
+----------------------------------
+- CREATE src/utils/swapMessage.ts
+  buildSwapWhatsAppUrl(phoneNumber, params) returns a wa.me URL with
+  pre-filled message containing:
+    - Target device name, capacity, price
+    - Trade-in device model, storage, all 5 conditions
+    - Estimated trade-in credit range
+    - Estimated balance to pay range
+  Uses the existing formatPrice utility.
+
+
+STEP 4: Build sub-components
+------------------------------
+All new files under src/component/swap/:
+
+1. SwapProductCarousel.tsx
+   - Swiper horizontal carousel of product cards
+   - Tap to select, visual highlight on selected card
+   - Fetches products using useGetProductsQuery()
+
+2. SwapCapacityPicker.tsx
+   - Appears after user selects a product
+   - Capacity pill buttons (128GB, 256GB, etc.)
+   - Shows selected product summary
+
+3. SwapTradeInForm.tsx
+   - Model dropdown + storage pills + condition assessment
+   - Same UI as current SwapDevice.tsx trade-in section
+
+4. SwapEstimateCard.tsx
+   - Live estimate: balance to pay, trade-in credit
+   - CTA: "Continue on WhatsApp"
+
+5. SwapWhatsAppSheet.tsx
+   - Bottom sheet overlay with message preview
+   - "Open WhatsApp" and "Copy message" buttons
+
+
+STEP 5: Assemble SwapPage.tsx
+-------------------------------
+- CREATE src/pages/SwapPage.tsx
+
+  Composes all sub-components. Local state only (no Redux for form data).
+  Uses existing RTK Query hooks for products, swap metadata, and evaluation.
+  Supports optional ?productId=<id>&capacity=<cap> URL params.
+  Integrates with AI assistant tradeInDraft auto-fill.
+
+  Page layout (top to bottom):
+    1. Header — "Trade-in Estimate" title
+    2. SwapProductCarousel — pick device to buy
+    3. SwapCapacityPicker — pick storage (appears after product selection)
+    4. SwapTradeInForm — trade-in device + conditions
+    5. SwapEstimateCard — live estimate + WhatsApp CTA
+    6. SwapWhatsAppSheet — overlay when CTA clicked
+
+
+STEP 6: Create minimal app shell for swap-only mode
+-----------------------------------------------------
+- CREATE src/layout/SwapShell.tsx
+
+  Minimal layout for Phase 1:
+    - Header with store logo/name only
+    - No navigation links
+    - No footer
+    - Renders <Outlet /> for the swap page content
+
+
+STEP 7: Gated routing
+-----------------------
+- MODIFY src/routes/AllRoutes.tsx
+
+  The router checks the feature flag and returns a different route tree:
+
+  When flag is ON (swap-only mode):
+    - Root layout: SwapShell (minimal branded header)
+    - Only route: /swap -> SwapPage
+    - Catch-all * -> redirects to /swap
+    - No other pages registered at all
+
+  When flag is OFF (full e-commerce):
+    - Everything works as today (unchanged)
+    - The new /swap route is NOT registered — completely invisible
+    - ProductDetails "Swap old device" points to old /product/:id/swap
+
+
+FILES SUMMARY
+-------------
+NEW FILES (10):
+  src/component/swap/ConditionSelector.tsx     - Extracted shared component
+  src/component/swap/SwapProductCarousel.tsx    - Product selection carousel
+  src/component/swap/SwapCapacityPicker.tsx     - Capacity picker
+  src/component/swap/SwapTradeInForm.tsx        - Trade-in form
+  src/component/swap/SwapEstimateCard.tsx       - Estimate display
+  src/component/swap/SwapWhatsAppSheet.tsx      - WhatsApp bottom sheet
+  src/pages/SwapPage.tsx                        - New page orchestrator
+  src/layout/SwapShell.tsx                      - Minimal shell for swap mode
+  src/lib/featureFlags.ts                       - Feature flag utility
+  src/utils/swapMessage.ts                      - WhatsApp message builder
+
+MODIFIED FILES (4):
+  src/pages/SwapDevice.tsx       - Import ConditionSelector instead of inline
+  src/routes/AllRoutes.tsx       - Gated route tree based on feature flag
+  src/vite-env.d.ts              - Add env type declarations
+  .env / .env.example            - Add new env vars
+
+
+EXISTING CODE TO REUSE
+-----------------------
+  useGetProductsQuery           -> src/redux/shopApi.ts
+  useGetSwapMetadataQuery       -> src/redux/shopApi.ts
+  useEvaluateSwapQuery          -> src/redux/shopApi.ts
+  formatPrice                   -> src/utils/formatPrice.ts
+  Swap types                    -> src/types/domain.ts
+  Product types                 -> src/types/domain.ts
+  useAssistant + tradeInDraft   -> src/context/AssistantContext.tsx
+  Debounce pattern              -> src/pages/SwapDevice.tsx (lines 58-76)
+  Assistant auto-fill pattern   -> src/pages/SwapDevice.tsx (lines 78-119)
+  Bottom sheet pattern          -> src/pages/ProductDetails.tsx (lines 296-354)
+  Swiper (already installed)    -> src/component/common/CarouselHero.tsx
+  iOS design tokens             -> src/index.css
+
+
+VERIFICATION / TESTING
+-----------------------
+1. VITE_ENABLE_NEW_SWAP=true  -> app shows ONLY the swap page with minimal header
+2. VITE_ENABLE_NEW_SWAP=true  -> navigating to /, /product, /cart, etc. all redirect to /swap
+3. VITE_ENABLE_NEW_SWAP=false -> full app works normally, all routes accessible
+4. VITE_ENABLE_NEW_SWAP=false -> /swap returns 404 / not found — the new page is not accessible
+5. Direct navigation to /swap -> product carousel shown, no pre-selection
+6. Select product -> capacity pills -> select trade-in -> estimate updates live
+7. Click "Continue on WhatsApp" -> sheet opens -> "Open WhatsApp" opens wa.me URL
+8. Assistant tradeInDraft auto-fills trade-in fields
+9. npm run build succeeds with no TypeScript errors

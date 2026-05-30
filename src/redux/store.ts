@@ -1,21 +1,39 @@
-import { configureStore } from "@reduxjs/toolkit";
+import { combineReducers, configureStore } from "@reduxjs/toolkit";
 import { setupListeners } from "@reduxjs/toolkit/query"
 import userReducer from "../features/user/userSlice"
 import cartReducer from "../features/cart/cartSlice"
 import authReducer from "../features/auth/authSlice"
 import { isFrontEndFrozen } from "../lib/frontEndFreeze"
 import { shopApi } from "./shopApi"
+import { persistStore, persistReducer, FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER } from 'redux-persist'
+import storage from 'redux-persist/lib/storage'
+
+const persistConfig = {
+  key: "root",
+  storage,
+  whitelist: ["cart", shopApi.reducerPath],
+}
+
+const rootReducer = combineReducers({
+  user: userReducer,
+  auth: authReducer,
+  cart: cartReducer,
+  [shopApi.reducerPath]: shopApi.reducer,
+})
+
+const persistedReducer = persistReducer(persistConfig, rootReducer)
 
 export const store = configureStore({
-  reducer: {
-    user: userReducer,
-    auth: authReducer,
-    cart: cartReducer,
-    [shopApi.reducerPath]: shopApi.reducer,
-  },
+  reducer: persistedReducer,
   middleware: (getDefaultMiddleware) =>
-    getDefaultMiddleware().concat(shopApi.middleware),
+    getDefaultMiddleware({
+      serializableCheck: {
+        ignoredActions: [FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER],
+      },
+    }).concat(shopApi.middleware),
 })
+
+export const persistor = persistStore(store)
 
 export type RootState = ReturnType<typeof store.getState>
 export type AppDispatch = typeof store.dispatch
