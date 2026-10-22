@@ -10,11 +10,17 @@ import cartRouter from "./router/cartRouter";
 import orderRouter from "./router/orderRouter";
 import swapRouter from "./router/swapRouter";
 import assistantRouter from "./router/assistantRouter";
+import { requestLog } from "./Middleware/requestLog";
+import { env } from "./config/env";
 
 export const mainApp = (app: Application) => {
   app.set("trust proxy", true);
+  app.use(requestLog("store"));
   app.use(cors());
-  app.use(morgan("dev"));
+  // The JSON request log is the record; morgan's coloured line is a local-dev convenience only.
+  if (env.nodeEnv !== "production") {
+    app.use(morgan("dev"));
+  }
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
   app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
