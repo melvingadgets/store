@@ -66,9 +66,14 @@ export const env = {
   // Until all are set, EasyBuy is read through its public catalog as before.
   platform: {
     authIssuer: (optionalEnv("AUTH_ISSUER") ?? "").replace(/\/+$/, ""),
+    authJwksUrl:
+      optionalEnv("AUTH_JWKS_URL") ??
+      (optionalEnv("AUTH_ISSUER") ? `${(optionalEnv("AUTH_ISSUER") as string).replace(/\/+$/, "")}/.well-known/jwks.json` : null),
     clientId: optionalEnv("SERVICE_CLIENT_ID"),
     clientSecret: optionalEnv("SERVICE_CLIENT_SECRET"),
     easyBuyApiUrl: optionalEnv("EASYBUY_API_URL"),
+    // The relay's JWKS, for verifying event-delivery signatures (Shortwork/AGENTS.md §3.4).
+    relayJwksUrl: optionalEnv("RELAY_JWKS_URL"),
   },
   ai: {
     provider: optionalEnv("AI_PROVIDER") ?? "openai",

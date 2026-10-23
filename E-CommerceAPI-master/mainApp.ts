@@ -12,6 +12,7 @@ import swapRouter from "./router/swapRouter";
 import assistantRouter from "./router/assistantRouter";
 import { requestLog } from "./Middleware/requestLog";
 import { env } from "./config/env";
+import { buildEventReceiver, platformReceiverEnabled } from "./utils/platformReceiver";
 
 export const mainApp = (app: Application) => {
   app.set("trust proxy", true);
@@ -21,6 +22,12 @@ export const mainApp = (app: Application) => {
   if (env.nodeEnv !== "production") {
     app.use(morgan("dev"));
   }
+  // Signed event deliveries from the relay (Shortwork/AGENTS.md §3.4). Mounted before the JSON
+  // parser: the signature covers the exact body bytes, so it needs the raw buffer.
+  if (platformReceiverEnabled) {
+    app.post("/internal/events", express.raw({ type: () => true, limit: "1mb" }), buildEventReceiver());
+  }
+
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
   app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));

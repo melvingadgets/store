@@ -12,3 +12,4 @@
   - `utils/easyBuyCatalog.ts` reads EasyBuy's internal catalog (kobo) and converts it to naira for existing callers.
   - It falls back to the public catalog until the platform settings exist.
   - `fetchEasyBuyQuote` returns EasyBuy's quote in kobo.
+- **Consuming events (U3):** when `AUTH_ISSUER`, `AUTH_JWKS_URL` and `RELAY_JWKS_URL` are set, the store mounts `/internal/events` (`utils/platformReceiver.ts`) and applies `easybuy.price.updated` into the read-only `easybuypricecache` (model `easyBuyPriceCache.ts`) — exactly once, in order, through the inbox transaction. The cache carries `source`/`sourceSeq`/`asOf` and is rebuildable by replaying events (never hand-written). The consumer test needs a replica set (27028).
