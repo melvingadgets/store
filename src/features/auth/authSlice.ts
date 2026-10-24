@@ -28,6 +28,15 @@ export const authSlice = createSlice({
         sessionUpdated: (state, action: PayloadAction<UserSessionRecord>) => {
             state.session = action.payload
         },
+        // Signed in through Melvin OS: the bridge holds the token in memory (the
+        // axios resolver reads it), so it's deliberately NOT put in state — nothing
+        // the token gets persisted by redux-persist. Only the user is reflected here.
+        bridgeSessionEstablished: (state, action: PayloadAction<{user: User}>) =>{
+            state.isAuthenticated = true
+            state.user = action.payload.user
+            state.token = null
+            state.session = null
+        },
         logoutSuccess: (state) =>{
             state.isAuthenticated= false
             state.user = null;
@@ -36,5 +45,5 @@ export const authSlice = createSlice({
         }
     }
 })
-export const {loginSuccess, logoutSuccess, sessionUpdated} = authSlice.actions
+export const {loginSuccess, logoutSuccess, sessionUpdated, bridgeSessionEstablished} = authSlice.actions
 export default authSlice.reducer

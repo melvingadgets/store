@@ -7,6 +7,7 @@ import { clearClientSessionState } from "../../utils/sessionCleanup";
 import { setApiClientUnauthorizedHandler } from "../../utils/axios";
 import { sessionUpdated } from "../../features/auth/authSlice";
 import { sendUserSessionPresence } from "../../utils/userSessionTelemetry";
+import { isEmbeddedInMelvin, notifyMelvinTokenExpired } from "../../lib/melvinBridge";
 
 const AuthSessionManager: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -28,6 +29,12 @@ const AuthSessionManager: React.FC = () => {
     };
 
     setApiClientUnauthorizedHandler(() => {
+      // Embedded: a 401 means the OS token lapsed — ask for a fresh one rather
+      // than tearing down the session and bouncing to the store's own login.
+      if (isEmbeddedInMelvin) {
+        notifyMelvinTokenExpired();
+        return;
+      }
       void forceLogout();
     });
 
