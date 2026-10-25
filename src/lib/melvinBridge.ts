@@ -64,7 +64,8 @@ let bridgeStarted = false
 const listeners = new Set<() => void>()
 
 const emitAuthChange = (): void => {
-  for (const listener of listeners) listener()
+  // forEach, not for..of: the store builds with target es5, which can't iterate a Set that way.
+  listeners.forEach((listener) => listener())
 }
 
 /** The OS token, or null before sign-in and once this backend has refused it. */
