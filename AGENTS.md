@@ -6,7 +6,7 @@
 - **Request log:** `E-CommerceAPI-master/Middleware/requestLog.ts`, mounted first in `mainApp.ts`. Keep its fields identical to the other services (rules §6). `morgan` is for local development only.
 - **Database user:** in production, connect as `store_api` with `readWrite` on the store database only. See `Shortwork/SECURITY-LOCKDOWN.md`.
 - **Roles:** this API uses lowercase `admin`/`superadmin`. Map auth's `Admin`/`SuperAdmin` in one place only (rules §4.4).
-- **Web app:** `src/` is the storefront. It embeds in Melvin OS through `src/lib/melvinBridge.ts` (see melvin-os `AGENTS.md`).
+- **Web app:** `src/` is the storefront. It embeds in Melvin OS through `src/lib/melvinBridge.ts` (see melvin-os `AGENTS.md`). It only uses the OS token once its backend accepts it (`src/lib/bridgeGate.ts`): a 401 is treated as expiry once, and if the refreshed token is refused too the store goes back to its own login. `npm test` runs the gate's tests (`node --test`, no extra dependencies).
 - **Tests:** `test/middleware.verify.test.js` needs `JWT_SECRET` set (any value) to pass. Two tests fail on `main` already: `capabilityRegistry searches products…` and `createProduct…`. They're about product names and images, not the platform work.
 - **Calling EasyBuy (U2):** `utils/platformClients.ts` builds the service-token client from `AUTH_ISSUER`, `SERVICE_CLIENT_ID`, `SERVICE_CLIENT_SECRET` and `EASYBUY_API_URL`.
   - `utils/easyBuyCatalog.ts` reads EasyBuy's internal catalog (kobo) and converts it to naira for existing callers.

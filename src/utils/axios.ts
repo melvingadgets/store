@@ -5,6 +5,7 @@ import axios, {
   type AxiosResponse,
 } from "axios";
 import { beginGlobalLoad } from "../lib/globalLoading";
+import { isMelvinBridgeToken, reportBridgeResponse } from "../lib/melvinBridge";
 import { notify } from "./notification";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -17,6 +18,8 @@ export type ApiClientRequestConfig = AxiosRequestConfig & {
 };
 
 type ApiClientInternalRequestConfig = InternalAxiosRequestConfig & {
+  // Set when the request carried the Melvin OS token, so its answer can teach the bridge gate.
+  __bridgeToken?: string;
   suppressGlobalLoader?: boolean;
   __globalLoadDone__?: (() => void) | null;
 };
@@ -50,6 +53,7 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers = config.headers ?? {};
       config.headers.Authorization = `Bearer ${token}`;
+      if (isMelvinBridgeToken(token)) config.__bridgeToken = token;
     }
     return config;
   },
@@ -69,11 +73,18 @@ apiClient.interceptors.request.use(
 
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => {
-    (response.config as ApiClientInternalRequestConfig).__globalLoadDone__?.();
+    const config = response.config as ApiClientInternalRequestConfig;
+    config.__globalLoadDone__?.();
+    if (config.__bridgeToken) reportBridgeResponse(config.__bridgeToken, response.status);
     return response;
   },
   (error) => {
-    (error.config as ApiClientInternalRequestConfig | undefined)?.__globalLoadDone__?.();
+    const config = error.config as ApiClientInternalRequestConfig | undefined;
+    config?.__globalLoadDone__?.();
+    // The OS token got an answer: expiry asks the OS for a fresh one; refused again falls back to
+    // the store's own login (see bridgeGate.ts).
+    const status = error.response?.status;
+    if (config?.__bridgeToken && typeof status === "number") reportBridgeResponse(config.__bridgeToken, status);
     return Promise.reject(error);
   },
 );
