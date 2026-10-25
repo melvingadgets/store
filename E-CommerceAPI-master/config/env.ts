@@ -60,7 +60,7 @@ const optionalEnv = (name: string) => {
 export const env = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   port: toNumber(process.env.PORT, 2222),
-  easyBuyTrackerBaseUrl: process.env.EASYBUY_TRACKER_BASE_URL ?? "https://easybuytrackerbackend.onrender.com",
+  easyBuyTrackerBaseUrl: process.env.EASYBUY_TRACKER_BASE_URL ?? "https://easybuy-api-production.up.railway.app",
   // Service-to-service calls (Shortwork/AGENTS.md §2): this service's OAuth client, the auth
   // service's token endpoint, and EasyBuy's base URL (its private Railway address in production).
   // Until all are set, EasyBuy is read through its public catalog as before.
