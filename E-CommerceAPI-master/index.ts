@@ -5,6 +5,7 @@ import { mainApp } from "./mainApp";
 import "./database/database";
 import Db from "./database/database";
 import { env } from "./config/env";
+import { initOutbox } from "./utils/platformMessaging";
 
 let server: Server | undefined;
 const app = express();
@@ -28,6 +29,8 @@ process.on("unhandledRejection", (reason) => {
 const startServer = async () => {
   try {
     await Db;
+    // Outbox indexes for order events; a no-op while EVENTS_ENABLED is off.
+    await initOutbox();
     mainApp(app);
 
     app.set("view engine", "ejs");

@@ -63,6 +63,13 @@ const guestCheckoutSchema = new Schema(
       default: "",
       trim: true,
     },
+    // Fees, as on a signed-in order (Shortwork/RESELLER-PLAN.md §8a): integer kobo, optional.
+    subtotalKobo: { type: Number, validate: { validator: Number.isSafeInteger, message: "subtotalKobo must be integer kobo" } },
+    deliveryFeeKobo: { type: Number, validate: { validator: Number.isSafeInteger, message: "deliveryFeeKobo must be integer kobo" } },
+    serviceFeeKobo: { type: Number, validate: { validator: Number.isSafeInteger, message: "serviceFeeKobo must be integer kobo" } },
+    totalKobo: { type: Number, validate: { validator: Number.isSafeInteger, message: "totalKobo must be integer kobo" } },
+    feeSource: { type: String },
+    feeQuoteMock: { type: Boolean },
   },
   {
     timestamps: true,

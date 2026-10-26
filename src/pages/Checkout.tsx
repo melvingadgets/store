@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import { checkoutCart, checkoutGuestCart, fetchCart } from '../features/cart/cartSlice'
 import type { AppDispatch, RootState } from '../redux/store'
 import type { GuestCheckoutGuest } from '../types/domain'
+import { getDeliveryQuote, type DeliveryQuote } from '../services/orderService'
 import formatPrice from '../utils/formatPrice'
 import { notify } from '../utils/notification'
 
@@ -24,13 +25,37 @@ const Checkout:React.FC = () => {
   const { items, checkoutStatus, bill } = useSelector((state: RootState)=> state.cart)
   const user = useSelector((state: RootState) => state.auth.user)
   const [guestForm, setGuestForm] = useState<GuestCheckoutGuest>(initialGuestForm)
-  const displayBill = bill
+  // Delivery fee (the courier's quote) and service fee (2.5 × the delivery fee, non-refundable),
+  // shown before the order is placed (Shortwork/RESELLER-PLAN.md §8a). Absent while fees are off.
+  const [quote, setQuote] = useState<DeliveryQuote | null>(null)
+  const displayBill = quote?.enabled ? quote.totalKobo / 100 : bill
 
   useEffect(() => {
     if (user?._id) {
       void dispatch(fetchCart())
     }
   }, [dispatch, user?._id])
+
+  const quoteKey = items.map((item) => `${item.productId}:${item.capacity ?? ''}:${item.quantity}`).join('|')
+  useEffect(() => {
+    if (items.length === 0) {
+      setQuote(null)
+      return
+    }
+    let active = true
+    getDeliveryQuote(items.map((item) => ({ productId: item.productId, quantity: item.quantity, capacity: item.capacity })))
+      .then((response) => {
+        if (active) setQuote(response.data.data ?? null)
+      })
+      .catch(() => {
+        if (active) setQuote(null)
+      })
+    return () => {
+      active = false
+    }
+    // quoteKey captures every change that affects the price.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quoteKey])
 
   const handleGuestChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = event.target
@@ -168,6 +193,19 @@ const Checkout:React.FC = () => {
                 </div>
               ))}
             </div>
+
+            {quote?.enabled ? (
+              <dl className="space-y-1.5 border-t border-slate-200/40 pt-4 text-sm">
+                <div className="flex justify-between gap-3"><dt className="ios-meta">Items</dt><dd>{formatPrice(quote.subtotalKobo / 100)}</dd></div>
+                <div className="flex justify-between gap-3"><dt className="ios-meta">Delivery</dt><dd>{formatPrice(quote.deliveryFeeKobo / 100)}</dd></div>
+                <div className="flex justify-between gap-3">
+                  <dt className="ios-meta">Service fee (non-refundable)</dt>
+                  <dd>{formatPrice(quote.serviceFeeKobo / 100)}</dd>
+                </div>
+                <div className="flex justify-between gap-3 font-bold"><dt>Total</dt><dd>{formatPrice(quote.totalKobo / 100)}</dd></div>
+                <p className="ios-meta pt-1">If you reject an item at delivery, the item price is refunded; the service fee covers its return.</p>
+              </dl>
+            ) : null}
           </section>
 
           <button

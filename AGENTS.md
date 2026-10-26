@@ -13,3 +13,11 @@
   - It falls back to the public catalog until the platform settings exist.
   - `fetchEasyBuyQuote` returns EasyBuy's quote in kobo.
 - **Consuming events (U3):** when `AUTH_ISSUER`, `AUTH_JWKS_URL` and `RELAY_JWKS_URL` are set, the store mounts `/internal/events` (`utils/platformReceiver.ts`) and applies `easybuy.price.updated` into the read-only `easybuypricecache` (model `easyBuyPriceCache.ts`) — exactly once, in order, through the inbox transaction. The cache carries `source`/`sourceSeq`/`asOf` and is rebuildable by replaying events (never hand-written). The consumer test needs a replica set (27028).
+- **Reseller programme (2026-10-26, branch `feat/reseller-programme`; `Shortwork/RESELLER-PLAN.md` §8a):**
+  - **Fees:** vendor prices carry no markup. Orders get `subtotalKobo`, `deliveryFeeKobo` (the courier's quote), `serviceFeeKobo` (2.5 × delivery, never refunded) and `totalKobo`; `bill` is unchanged.
+  - **`STORE_FEES_ENABLED`:** stays **off** until a real courier exists. `services/courier.ts` only has a MOCK provider (see `Shortwork/MOCK-DATA-REVIEW.md`).
+  - **Quote route:** `POST /api/v1/delivery-quote` gives the web checkout its fee lines.
+  - **Order lifecycle:** `PATCH /api/v1/orders/:orderId/status` (admin) with `mark_paid | complete | cancel | reject_at_delivery | refund`. It's a state machine of conditional updates; each step writes its `store.order.*` event in the same transaction when `EVENTS_ENABLED=true` (`utils/platformMessaging.ts`).
+  - **Reseller read route:** `GET /internal/people/:personId/orders` (scope `store:orders.read`).
+  - **Orders carry the buyer's `personId`,** taken from their account, never the body.
+  - **Known bug, not fixed here:** `getCartProductId` recurses forever on a mongoose ObjectId (its `_id` is itself). The cancel compensation reads ids directly instead.

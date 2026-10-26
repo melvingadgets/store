@@ -25,3 +25,17 @@ export const checkoutGuestOrder = (payload: GuestCheckoutPayload) =>
   apiClient.post<ApiResponse<CheckoutRecord>>("/guest-checkout", payload);
 
 export const getOrders = () => apiClient.get<ApiResponse<OrderRecord[]>>("/orders");
+
+// What an order costs before checkout (Shortwork/RESELLER-PLAN.md §8a), in integer kobo. While
+// fees are off on the API, `enabled` is false and the checkout shows the item total only.
+export interface DeliveryQuote {
+  enabled: boolean;
+  subtotalKobo: number;
+  deliveryFeeKobo: number;
+  serviceFeeKobo: number;
+  totalKobo: number;
+  mock: boolean;
+}
+
+export const getDeliveryQuote = (items: CheckoutItemPayload[], destination?: string) =>
+  apiClient.post<ApiResponse<DeliveryQuote>>("/delivery-quote", { items, ...(destination ? { destination } : {}) });

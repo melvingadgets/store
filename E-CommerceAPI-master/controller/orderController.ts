@@ -1,10 +1,46 @@
 import type { Request, Response } from "express";
+import mongoose from "mongoose";
 import cartModel from "../model/cartModel";
 import guestCheckoutModel from "../model/guestCheckoutModel";
 import orderModel from "../model/orderModel";
 import productModel from "../model/productModel";
+import userModel from "../model/userModel";
+import { inTransaction } from "@melvingadgets/platform-kit";
+import { env } from "../config/env";
 import { loadCatalogModels, withCatalogImagesForOrders } from "../utils/catalogImagePresenter";
+import { computeOrderFees, nairaNumberToKobo, type OrderFees } from "../utils/orderFees";
+import {
+  mongoClient,
+  publishOrderCancelled,
+  publishOrderCompleted,
+  publishOrderPaid,
+  traceIdOf,
+} from "../utils/platformMessaging";
 import { findStorageOption, normalizeCapacity, summarizeStorageOptions } from "../utils/storageOptions";
+
+// Fee fields stored on an order (Shortwork/RESELLER-PLAN.md §8a), integer kobo.
+const feeFields = (fees: OrderFees) => ({
+  subtotalKobo: fees.subtotalKobo,
+  deliveryFeeKobo: fees.deliveryFeeKobo,
+  serviceFeeKobo: fees.serviceFeeKobo,
+  totalKobo: fees.totalKobo,
+  feeSource: fees.feeSource,
+  feeQuoteMock: fees.mock,
+});
+
+// The buyer's platform person, from their own account. Never from the request body. Best-effort:
+// a lookup problem leaves the order without a person (no reseller attribution) rather than
+// blocking the checkout.
+const personIdOf = async (userId: string): Promise<string | null> => {
+  if (!mongoose.isValidObjectId(userId)) return null;
+  try {
+    const account = await userModel.findById(userId).select("personId").lean();
+    const personId = (account as { personId?: unknown } | null)?.personId;
+    return typeof personId === "string" && personId ? personId : null;
+  } catch {
+    return null;
+  }
+};
 
 const orderPopulation = {
   path: "orderItem.products",
@@ -450,6 +486,10 @@ export const checkOut = async (req: Request, res: Response): Promise<Response> =
       sourceCartId = findUserCart._id.toString();
     }
 
+    // Priced before stock is reserved, so a failing courier quote never strands a reservation.
+    const fees = await computeOrderFees(checkoutItems);
+    const personId = await personIdOf(userId);
+
     const stockReservation = await reserveInventory(checkoutItems);
 
     if (!stockReservation.success) {
@@ -468,6 +508,8 @@ export const checkOut = async (req: Request, res: Response): Promise<Response> =
       paymentStatus: "pending",
       paymentReference: normalizePaymentReference(paymentReference, "web"),
       orderStatus: "created",
+      ...feeFields(fees),
+      ...(personId ? { personId } : {}),
     });
 
     reservedInventory = [];
@@ -537,6 +579,9 @@ export const guestCheckOut = async (req: Request, res: Response): Promise<Respon
       });
     }
 
+    // Guests pay the same fees; they have no person, so their orders never reach a reseller.
+    const fees = await computeOrderFees(normalizedCheckoutItems.items, validatedGuest.guest.address);
+
     const stockReservation = await reserveInventory(normalizedCheckoutItems.items);
 
     if (!stockReservation.success) {
@@ -555,6 +600,7 @@ export const guestCheckOut = async (req: Request, res: Response): Promise<Respon
       paymentStatus: "pending",
       paymentReference: normalizePaymentReference(paymentReference, "guest"),
       orderStatus: "created",
+      ...feeFields(fees),
     });
 
     reservedInventory = [];
@@ -576,5 +622,163 @@ export const guestCheckOut = async (req: Request, res: Response): Promise<Respon
       success: 0,
       message: "failed to create guest checkout",
     });
+  }
+};
+
+// POST /api/v1/delivery-quote  { items: [{ productId, quantity, capacity }], destination? }
+// What an order would cost before checkout: item subtotal, the courier's delivery quote and the
+// service fee, in kobo (Shortwork/RESELLER-PLAN.md §8a). While fees are off it returns the subtotal
+// with zero fees and enabled:false, so the web checkout shows no fee lines.
+export const getDeliveryQuote = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { items = [], destination } = req.body as { items?: RawCheckoutItem[]; destination?: unknown };
+    const normalized = await normalizeCheckoutItems(items);
+    if (!normalized.success) {
+      return res.status(normalized.statusCode).json({ success: 0, message: normalized.message });
+    }
+    const fees = await computeOrderFees(normalized.items, sanitizeValue(destination) || undefined);
+    return res.status(200).json({
+      success: 1,
+      message: "delivery quote",
+      data: {
+        enabled: env.fees.enabled,
+        currency: "NGN",
+        unit: "kobo",
+        ...fees,
+        // The product price is refundable; the service fee never is; the delivery fee follows the
+        // courier's terms (RESELLER-PLAN.md R8).
+        refunds: { productPrice: true, serviceFee: false, deliveryFee: "courier_terms" },
+      },
+    });
+  } catch {
+    return res.status(500).json({ success: 0, message: "failed to quote delivery" });
+  }
+};
+
+// ── Order lifecycle (admin) ────────────────────────────────────────────────────────────────
+// An explicit state machine (Shortwork/AGENTS.md §3.7). Each allowed step is one conditional
+// update, so a concurrent change makes it fail instead of overwriting (§3.8), and the step and its
+// event commit together (§3.1). Any step not listed is refused. Until a courier webhook exists,
+// admins drive these by hand.
+type OrderAction = "mark_paid" | "complete" | "cancel" | "reject_at_delivery" | "refund";
+
+const ORDER_STEPS: Record<OrderAction, { from: Record<string, unknown>; set: (now: Date) => Record<string, unknown> }> = {
+  mark_paid: {
+    from: { paymentStatus: "pending", orderStatus: { $in: ["created", "processing"] } },
+    set: (now) => ({ paymentStatus: "paid", orderStatus: "processing", paidAt: now }),
+  },
+  complete: {
+    from: { paymentStatus: "paid", orderStatus: "processing" },
+    set: (now) => ({ orderStatus: "completed", completedAt: now }),
+  },
+  cancel: {
+    from: { orderStatus: { $in: ["created", "processing"] } },
+    set: (now) => ({ orderStatus: "cancelled", cancelledAt: now, cancelReason: "cancelled" }),
+  },
+  reject_at_delivery: {
+    from: { paymentStatus: "paid", orderStatus: "processing" },
+    set: (now) => ({ orderStatus: "cancelled", cancelledAt: now, cancelReason: "rejected_at_delivery" }),
+  },
+  refund: {
+    from: { orderStatus: "completed" },
+    set: (now) => ({ orderStatus: "cancelled", cancelledAt: now, cancelReason: "refunded" }),
+  },
+};
+
+const isOrderAction = (value: unknown): value is OrderAction =>
+  typeof value === "string" && Object.prototype.hasOwnProperty.call(ORDER_STEPS, value);
+
+const orderMoney = (order: Record<string, any>) => {
+  const subtotalKobo = Number.isSafeInteger(order.subtotalKobo)
+    ? order.subtotalKobo
+    : (order.orderItem ?? []).reduce(
+        (total: number, item: { price: number; quantity: number }) => total + nairaNumberToKobo(item.price) * Math.max(1, item.quantity),
+        0,
+      );
+  const deliveryFeeKobo = Number.isSafeInteger(order.deliveryFeeKobo) ? order.deliveryFeeKobo : 0;
+  const serviceFeeKobo = Number.isSafeInteger(order.serviceFeeKobo) ? order.serviceFeeKobo : 0;
+  const totalKobo = Number.isSafeInteger(order.totalKobo) ? order.totalKobo : subtotalKobo + deliveryFeeKobo + serviceFeeKobo;
+  return { subtotalKobo, deliveryFeeKobo, serviceFeeKobo, totalKobo };
+};
+
+// PATCH /api/v1/orders/:orderId/status  { action }   (admin only)
+export const updateOrderStatus = async (req: Request, res: Response): Promise<Response> => {
+  const orderId = sanitizeValue(req.params.orderId);
+  const action = (req.body as { action?: unknown })?.action;
+  if (!/^[a-f0-9]{24}$/i.test(orderId)) {
+    return res.status(400).json({ success: 0, message: "invalid order id" });
+  }
+  if (!isOrderAction(action)) {
+    return res.status(400).json({ success: 0, message: `action must be one of ${Object.keys(ORDER_STEPS).join(", ")}` });
+  }
+
+  const step = ORDER_STEPS[action];
+  const now = new Date();
+  try {
+    const apply = (session?: unknown) =>
+      orderModel
+        .findOneAndUpdate({ _id: orderId, ...step.from }, { $set: step.set(now) }, {
+          returnDocument: "after",
+          ...(session ? { session: session as never } : {}),
+        })
+        .populate({ path: "orderItem.products", select: "name" })
+        .lean();
+
+    const publish = async (order: Record<string, any>, session: Parameters<typeof publishOrderPaid>[0]) => {
+      const personId = typeof order.personId === "string" && order.personId ? order.personId : null;
+      const money = orderMoney(order);
+      const traceId = traceIdOf(req as { traceId?: string });
+      if (action === "mark_paid") {
+        await publishOrderPaid(session, traceId, {
+          orderId,
+          personId,
+          items: (order.orderItem ?? []).slice(0, 100).map((item: any) => ({
+            name: String(item.products?.name || "Item").slice(0, 200),
+            quantity: Math.max(1, Number(item.quantity) || 1),
+            priceKobo: nairaNumberToKobo(item.price),
+          })),
+          ...money,
+        });
+      } else if (action === "complete") {
+        await publishOrderCompleted(session, traceId, { orderId, personId, serviceFeeKobo: money.serviceFeeKobo });
+      } else {
+        await publishOrderCancelled(session, traceId, { orderId, personId, reason: step.set(now).cancelReason as "cancelled" });
+      }
+    };
+
+    const updated = env.eventsEnabled
+      ? await inTransaction(mongoClient(), async (session) => {
+          const order = await apply(session);
+          if (order) await publish(order as Record<string, any>, session);
+          return order;
+        })
+      : await apply();
+
+    if (!updated) {
+      const existing = await orderModel.findById(orderId).select("paymentStatus orderStatus").lean();
+      if (!existing) return res.status(404).json({ success: 0, message: "order not found" });
+      // A step that isn't allowed from the current state is refused and logged (AGENTS.md §3.7).
+      console.warn(JSON.stringify({ event: "order_step_refused", orderId, action, paymentStatus: existing.paymentStatus, orderStatus: existing.orderStatus }));
+      return res.status(409).json({
+        success: 0,
+        message: `cannot ${action} an order that is ${existing.orderStatus} (payment ${existing.paymentStatus})`,
+      });
+    }
+
+    // Compensation for a cancelled order: release the stock it reserved at checkout. The product
+    // id is read directly: getCartProductId recurses forever on an ObjectId (its _id is itself).
+    if (action === "cancel" || action === "reject_at_delivery") {
+      await rollbackReservedInventory(
+        ((updated as Record<string, any>).orderItem ?? []).map((item: any) => ({
+          productId: String(item.products && typeof item.products === "object" && item.products._id ? item.products._id : item.products),
+          quantity: Number(item.quantity) || 1,
+          capacity: String(item.capacity ?? ""),
+        })),
+      ).catch((error) => console.error(JSON.stringify({ event: "order_stock_release_failed", orderId, message: (error as Error).message })));
+    }
+
+    return res.status(200).json({ success: 1, message: `order ${action} done`, data: updated });
+  } catch {
+    return res.status(500).json({ success: 0, message: "failed to update order" });
   }
 };

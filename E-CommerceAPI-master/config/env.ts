@@ -75,6 +75,18 @@ export const env = {
     // The relay's JWKS, for verifying event-delivery signatures (Shortwork/AGENTS.md §3.4).
     relayJwksUrl: optionalEnv("RELAY_JWKS_URL"),
   },
+  // Write order events (store.order.paid/completed/cancelled) to the outbox (Shortwork/AGENTS.md §3).
+  // Needs a replica set (Atlas is one) and the relay running. Off by default for an additive rollout.
+  eventsEnabled: toBoolean(process.env.EVENTS_ENABLED, false),
+  // Delivery fee and service fee at checkout (Shortwork/RESELLER-PLAN.md §8a). Vendor prices carry no
+  // markup; our income is the service fee, 2.5 × the courier's delivery quote, never refunded.
+  // OFF until a real courier is integrated: with COURIER_PROVIDER=mock the quote is placeholder data
+  // (MOCK-DATA-REVIEW.md), and charging customers a made-up delivery fee would be wrong.
+  fees: {
+    enabled: toBoolean(process.env.STORE_FEES_ENABLED, false),
+    courier: optionalEnv("COURIER_PROVIDER") ?? "mock",
+    serviceFeeMultiplier: optionalEnv("STORE_SERVICE_FEE_MULTIPLIER") ?? "2.5",
+  },
   ai: {
     provider: optionalEnv("AI_PROVIDER") ?? "openai",
     apiKey: optionalEnv("AI_API_KEY"),

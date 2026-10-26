@@ -13,6 +13,8 @@ import assistantRouter from "./router/assistantRouter";
 import { requestLog } from "./Middleware/requestLog";
 import { env } from "./config/env";
 import { buildEventReceiver, platformReceiverEnabled } from "./utils/platformReceiver";
+import { createInternalRouter } from "./router/internalRouter";
+import { getPlatformUserVerifier } from "./utils/platformUser";
 
 export const mainApp = (app: Application) => {
   app.set("trust proxy", true);
@@ -31,6 +33,8 @@ export const mainApp = (app: Application) => {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
   app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
+  // Service-token reads for other platform services (the reseller service's order lookups).
+  app.use("/internal", createInternalRouter(getPlatformUserVerifier()));
 
   app.get("/api", (_req, res) => {
     res.status(200).json({
