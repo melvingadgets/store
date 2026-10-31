@@ -7,6 +7,7 @@ import {
   useGetUserSessionsQuery,
 } from '../redux/shopApi'
 import type { RootState } from '../redux/store'
+import { can } from '../lib/access'
 import type { UserSessionRecord } from '../types/domain'
 
 const formatTimestamp = (value?: string | null) => value ? new Date(value).toLocaleString() : "-"
@@ -33,7 +34,7 @@ const sessionStatusClassName = (status: UserSessionRecord["status"]) => {
 const AdminSessions: React.FC = () => {
   const navigate = useNavigate()
   const user = useSelector((state: RootState) => state.auth.user)
-  const isAdmin = user?.role === "admin" || user?.role === "superadmin"
+  const isAdmin = can(user, "store.admin.access")
   const { data: userSessionSummary, isFetching: userSessionSummaryLoading } = useGetUserSessionSummaryQuery(undefined, {
     skip: !isAdmin,
     pollingInterval: 30_000,

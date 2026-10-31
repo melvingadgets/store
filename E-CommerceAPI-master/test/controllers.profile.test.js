@@ -16,7 +16,7 @@ test("updateProfile returns 404 when the profile does not exist", async () => {
   const restoreFindById = stubMethod(profileModel, "findById", async () => null);
   const req = createMockRequest({
     params: { proId: "profile-1" },
-    user: { _id: "user-1", userName: "Mel", role: "user" },
+    user: { _id: "user-1", userName: "Mel", role: "User" },
   });
   const res = createMockResponse();
 
@@ -37,7 +37,7 @@ test("updateProfile blocks edits from other non-admin users", async () => {
   }));
   const req = createMockRequest({
     params: { proId: "profile-1" },
-    user: { _id: "owner-1", userName: "Mel", role: "user" },
+    user: { _id: "owner-1", userName: "Mel", role: "User" },
   });
   const res = createMockResponse();
 
@@ -65,7 +65,7 @@ test("updateProfile updates the allowed fields for the owner", async () => {
   const req = createMockRequest({
     params: { proId: "profile-1" },
     body: { firstName: "Updated", phoneNumber: "12345" },
-    user: { _id: "owner-1", userName: "Mel", role: "user" },
+    user: { _id: "owner-1", userName: "Mel", role: "User" },
   });
   const res = createMockResponse();
 
@@ -88,7 +88,7 @@ test("editImage requires an uploaded file", async () => {
   }));
   const req = createMockRequest({
     params: { proId: "profile-1" },
-    user: { _id: "owner-1", userName: "Mel", role: "user" },
+    user: { _id: "owner-1", userName: "Mel", role: "User" },
   });
   const res = createMockResponse();
 
@@ -122,7 +122,7 @@ test("editImage stores a local avatar URL when Cloudinary is disabled", async ()
       filename: "avatar.png",
       path: "uploads/avatar.png",
     },
-    user: { _id: "owner-1", userName: "Mel", role: "user" },
+    user: { _id: "owner-1", userName: "Mel", role: "User" },
   });
   const res = createMockResponse();
 

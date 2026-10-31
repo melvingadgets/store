@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { Suspense, lazy, useLayoutEffect } from "react"
 import { Navigate, RouteObject, createBrowserRouter } from "react-router-dom"
-import { RequireAuth, RequireGuest } from "../component/common/RouteGuards"
+import { RequireAuth, RequireGuest, RequirePermission } from "../component/common/RouteGuards"
 import { isNewSwapEnabled } from "../lib/featureFlags"
 import AppShell from "../layout/AppShell"
 import SwapShell from "../layout/SwapShell"
@@ -61,9 +61,14 @@ const fullAppRoutes: RouteObject[] = [
                   children: [
                     {path: "/account", element: withSuspense(Account)},
                     {path: "/settings", element: withSuspense(Account)},
-                    {path: "/admin", element: withSuspense(Admin)},
-                    {path: "/admin/sessions", element: withSuspense(AdminSessions)},
-                    {path: "/menu", element: withSuspense(Admin)},
+                    {
+                      element: <RequirePermission perm="store.admin.access" />,
+                      children: [
+                        {path: "/admin", element: withSuspense(Admin)},
+                        {path: "/admin/sessions", element: withSuspense(AdminSessions)},
+                        {path: "/menu", element: withSuspense(Admin)},
+                      ]
+                    },
                     {path: "/history", element: withSuspense(History)},
                   ]
                 },

@@ -2,11 +2,12 @@ import type { Request, Response } from "express";
 import { env, hasCloudinaryConfig } from "../config/env";
 import profileModel from "../model/profileModel";
 import cloudinary from "../utils/cloudinary";
+import { can } from "@melvingadgets/platform-kit";
 
+// Staff may edit anyone's profile; everyone else only their own. Permission-based, so a
+// `SuperAdmin` inherits it rather than needing to be named twice.
 const canAccessProfile = (req: Request, profileUserId?: string) =>
-  req.user?.role === "admin" ||
-  req.user?.role === "superadmin" ||
-  req.user?._id === profileUserId;
+  can(req.user, "store.admin.access") || req.user?._id === profileUserId;
 
 export const updateProfile = async (req: Request, res: Response): Promise<Response> => {
   try {

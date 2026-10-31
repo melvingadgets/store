@@ -18,7 +18,9 @@ export interface User {
   _id: string;
   userName: string;
   email: string;
-  role?: "user" | "admin" | "superadmin";
+  // The canonical platform spelling (AGENTS.md §4.4). The store API stores and returns
+  // `User | Admin | SuperAdmin`; the lowercase dialect was removed in the RBAC rollout.
+  role?: "User" | "Admin" | "SuperAdmin";
   profile?: Profile | string;
   verify?: boolean;
 }

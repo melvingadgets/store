@@ -13,7 +13,7 @@ const {
 
 test("updateUserSessionPresence requires an authenticated session id", async () => {
   const req = createMockRequest({
-    user: { _id: "user-1", userName: "Mel", role: "user" },
+    user: { _id: "user-1", userName: "Mel", role: "User" },
     body: {},
   });
   const res = createMockResponse();
@@ -44,7 +44,7 @@ test("updateUserSessionPresence refreshes session metadata and marks hidden tabs
   });
   const restoreFindSession = stubMethod(userSessionModel, "findOne", async () => session);
   const req = createMockRequest({
-    user: { _id: "user-1", userName: "Mel", role: "user" },
+    user: { _id: "user-1", userName: "Mel", role: "User" },
     body: {
       sessionId: "session-1",
       event: "visibilitychange",
@@ -80,7 +80,7 @@ test("getAdminUserSessions returns normalized recent sessions", async () => {
   const sessions = [
     createDocument({
       sessionId: "session-1",
-      user: { _id: "user-1", userName: "Mel", email: "mel@example.com", role: "user" },
+      user: { _id: "user-1", userName: "Mel", email: "mel@example.com", role: "User" },
       loginAt: new Date("2026-03-15T10:00:00.000Z"),
       lastSeenAt: new Date("2026-03-15T10:00:30.000Z"),
       status: "online",
@@ -124,7 +124,7 @@ test("getAdminUserSessionSummary aggregates counts and breakdowns", async () => 
   const sessions = [
     createDocument({
       sessionId: "session-1",
-      user: { _id: "user-1", userName: "Mel", email: "mel@example.com", role: "user" },
+      user: { _id: "user-1", userName: "Mel", email: "mel@example.com", role: "User" },
       loginAt: new Date("2026-03-15T10:00:00.000Z"),
       lastSeenAt: new Date(),
       status: "online",
@@ -137,7 +137,7 @@ test("getAdminUserSessionSummary aggregates counts and breakdowns", async () => 
     }),
     createDocument({
       sessionId: "session-2",
-      user: { _id: "user-2", userName: "Store", email: "store@example.com", role: "admin" },
+      user: { _id: "user-2", userName: "Store", email: "store@example.com", role: "Admin" },
       loginAt: new Date("2026-03-15T09:00:00.000Z"),
       lastSeenAt: new Date("2026-03-15T09:00:00.000Z"),
       logoutAt: new Date("2026-03-15T09:30:00.000Z"),

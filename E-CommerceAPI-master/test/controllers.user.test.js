@@ -166,7 +166,7 @@ test("loginUser rejects incorrect passwords", async () => {
     email: "mel@example.com",
     password: "hashed-password",
     verify: true,
-    role: "user",
+    role: "User",
   });
   const restoreFindOne = stubMethod(userModel, "findOne", () => createPopulateChain(loginUser));
   const restoreCompare = stubMethod(bcrypt, "compare", async () => false);
@@ -196,7 +196,7 @@ test("loginUser blocks unverified accounts", async () => {
     email: "mel@example.com",
     password: "hashed-password",
     verify: false,
-    role: "user",
+    role: "User",
   });
   const restoreHasMailConfig = stubProperty(envModule, "hasMailConfig", false);
   const restoreFindOne = stubMethod(userModel, "findOne", () => createPopulateChain(loginUser));
@@ -228,7 +228,7 @@ test("loginUser still returns 403 when resending the verification email fails", 
     email: "mel@example.com",
     password: "hashed-password",
     verify: false,
-    role: "user",
+    role: "User",
   });
   const restoreHasMailConfig = stubProperty(envModule, "hasMailConfig", true);
   const restoreFindOne = stubMethod(userModel, "findOne", () => createPopulateChain(loginUser));
@@ -272,7 +272,7 @@ test("loginUser returns a token and sanitized user payload for verified accounts
     email: "mel@example.com",
     password: "hashed-password",
     verify: true,
-    role: "admin",
+    role: "Admin",
   });
   const restoreFindOne = stubMethod(userModel, "findOne", () => createPopulateChain(loginUser));
   const restoreCompare = stubMethod(bcrypt, "compare", async () => true);
@@ -284,7 +284,7 @@ test("loginUser returns a token and sanitized user payload for verified accounts
       _id: "user-1",
       userName: "Mel",
       email: "mel@example.com",
-      role: "admin",
+      role: "Admin",
     },
   }));
   const req = createMockRequest({
@@ -316,7 +316,7 @@ test("loginUser returns a token and sanitized user payload for verified accounts
     assert.equal(res.statusCode, 200);
     assert.equal(res.body.data.token, "signed-token");
     assert.equal(res.body.data.user.password, undefined);
-    assert.equal(res.body.data.user.role, "admin");
+    assert.equal(res.body.data.user.role, "Admin");
     assert.equal(res.body.data.session.status, "online");
     assert.equal(res.body.data.session.browser, "Chrome");
     assert.equal(res.body.data.session.ipAddress, "41.217.0.10");
@@ -356,7 +356,7 @@ test("logOut marks the tracked session as logged out", async () => {
         visibilityState: "visible",
       },
     },
-    user: { _id: "user-1", userName: "Mel", role: "user" },
+    user: { _id: "user-1", userName: "Mel", role: "User" },
     headers: {
       "x-forwarded-for": "41.217.0.11",
     },
@@ -384,7 +384,7 @@ test("getSingleUser always uses the token user id", async () => {
   const restoreFindById = stubMethod(userModel, "findById", () => createPopulateChain(userRecord));
   const req = createMockRequest({
     params: { id: "owner-2" },
-    user: { _id: "owner-1", userName: "Mel", role: "user" },
+    user: { _id: "owner-1", userName: "Mel", role: "User" },
   });
   const res = createMockResponse();
 

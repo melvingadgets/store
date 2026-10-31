@@ -6,7 +6,8 @@ declare global {
     interface UserPayload {
       _id: string;
       userName: string;
-      role: "user" | "admin" | "superadmin";
+      // The canonical platform spelling (AGENTS.md §4.4). Never lowercase.
+      role: "User" | "Admin" | "SuperAdmin";
     }
 
     interface Request {

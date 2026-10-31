@@ -7,14 +7,8 @@ import {
   onMelvinAuthChange,
   postToMelvin,
   startMelvinAuthBridge,
-  type MelvinBridgeUser,
 } from '../../lib/melvinBridge'
 import { bridgeSessionEstablished, logoutSuccess } from '../../features/auth/authSlice'
-import type { User } from '../../types/domain'
-
-// Auth roles are PascalCase; the store API uses lowercase (AGENTS §4.4).
-const toStoreRole = (role: MelvinBridgeUser['role']): User['role'] =>
-  role === 'Admin' ? 'admin' : role === 'SuperAdmin' ? 'superadmin' : 'user'
 
 export const MelvinBridge = () => {
   const dispatch = useDispatch()
@@ -42,7 +36,9 @@ export const MelvinBridge = () => {
               _id: user._id,
               userName: user.fullName,
               email: user.email ?? '',
-              role: toStoreRole(user.role),
+              // The bridge already carries the canonical platform spelling (AGENTS §4.4);
+              // the mapping this replaced was the last place a role changed casing.
+              role: user.role,
               verify: true,
             },
           }),

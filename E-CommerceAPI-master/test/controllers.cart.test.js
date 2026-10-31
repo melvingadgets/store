@@ -44,7 +44,7 @@ test("addToCart creates a cart when the user does not already have one", async (
   const restoreCartFindById = stubMethod(cartModel, "findById", () => createPopulateChain(createdCart));
   const req = createMockRequest({
     params: { prodId: "product-1" },
-    user: { _id: "user-1", userName: "Mel", role: "user" },
+    user: { _id: "user-1", userName: "Mel", role: "User" },
   });
   const res = createMockResponse();
 
@@ -85,7 +85,7 @@ test("addToCart increments quantity when the product already exists in the cart"
   const restoreCartFindById = stubMethod(cartModel, "findById", () => createPopulateChain(cart));
   const req = createMockRequest({
     params: { prodId: "product-1" },
-    user: { _id: "user-1", userName: "Mel", role: "user" },
+    user: { _id: "user-1", userName: "Mel", role: "User" },
   });
   const res = createMockResponse();
 
@@ -126,7 +126,7 @@ test("addToCart rejects requests when the available stock is exhausted", async (
   const restoreCartFind = stubMethod(cartModel, "findOne", () => createSortedResult(cart));
   const req = createMockRequest({
     params: { prodId: "product-1" },
-    user: { _id: "user-1", userName: "Mel", role: "user" },
+    user: { _id: "user-1", userName: "Mel", role: "User" },
   });
   const res = createMockResponse();
 
@@ -160,7 +160,7 @@ test("addToCart falls back to product qty when legacy storage option quantities 
   const req = createMockRequest({
     params: { prodId: "product-1" },
     body: { capacity: "128GB" },
-    user: { _id: "user-1", userName: "Mel", role: "user" },
+    user: { _id: "user-1", userName: "Mel", role: "User" },
   });
   const res = createMockResponse();
 
@@ -181,7 +181,7 @@ test("addToCart falls back to product qty when legacy storage option quantities 
 test("removeCartItem requires a product identifier", async () => {
   const req = createMockRequest({
     params: {},
-    user: { _id: "user-1", userName: "Mel", role: "user" },
+    user: { _id: "user-1", userName: "Mel", role: "User" },
   });
   const res = createMockResponse();
 
@@ -209,7 +209,7 @@ test("removeCartItem decreases quantity and recalculates the bill", async () => 
   const req = createMockRequest({
     params: {},
     query: { productId: "product-1" },
-    user: { _id: "user-1", userName: "Mel", role: "user" },
+    user: { _id: "user-1", userName: "Mel", role: "User" },
   });
   const res = createMockResponse();
 
@@ -244,7 +244,7 @@ test("removeCartItem removes the cart item when quantity reaches zero", async ()
   const req = createMockRequest({
     params: {},
     query: { productId: "product-1" },
-    user: { _id: "user-1", userName: "Mel", role: "user" },
+    user: { _id: "user-1", userName: "Mel", role: "User" },
   });
   const res = createMockResponse();
 
@@ -265,7 +265,7 @@ test("getCart returns an empty cart payload when the user has no saved cart", as
   const restoreCatalogFetch = stubMethod(easyBuyCatalog, "fetchPublicEasyBuyCatalog", async () => null);
   const req = createMockRequest({
     params: {},
-    user: { _id: "user-1", userName: "Mel", role: "user" },
+    user: { _id: "user-1", userName: "Mel", role: "User" },
   });
   const res = createMockResponse();
 
@@ -320,7 +320,7 @@ test("getCart prefers EasyBuy catalog images for populated products", async () =
   }));
   const req = createMockRequest({
     params: {},
-    user: { _id: "user-1", userName: "Mel", role: "user" },
+    user: { _id: "user-1", userName: "Mel", role: "User" },
   });
   const res = createMockResponse();
 
@@ -353,7 +353,7 @@ test("removeCartItem supports full removal through the removeAll query flag", as
   const req = createMockRequest({
     params: {},
     query: { productId: "product-1", removeAll: "true" },
-    user: { _id: "user-1", userName: "Mel", role: "user" },
+    user: { _id: "user-1", userName: "Mel", role: "User" },
   });
   const res = createMockResponse();
 

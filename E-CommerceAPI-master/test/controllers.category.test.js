@@ -14,7 +14,7 @@ const {
 test("createCategory validates the category name", async () => {
   const req = createMockRequest({
     body: { name: "" },
-    user: { _id: "admin-1", userName: "Admin", role: "admin" },
+    user: { _id: "admin-1", userName: "Admin", role: "Admin" },
   });
   const res = createMockResponse();
 
@@ -28,7 +28,7 @@ test("createCategory requires a valid owner", async () => {
   const restoreFindById = stubMethod(userModel, "findById", async () => null);
   const req = createMockRequest({
     body: { name: "Phones" },
-    user: { _id: "admin-1", userName: "Admin", role: "admin" },
+    user: { _id: "admin-1", userName: "Admin", role: "Admin" },
   });
   const res = createMockResponse();
 
@@ -47,7 +47,7 @@ test("createCategory creates a category with a slug", async () => {
   const restoreCreate = stubMethod(categoryModel, "create", async (payload) => payload);
   const req = createMockRequest({
     body: { name: "Phones", parent: "Devices" },
-    user: { _id: "admin-1", userName: "Admin", role: "admin" },
+    user: { _id: "admin-1", userName: "Admin", role: "Admin" },
   });
   const res = createMockResponse();
 

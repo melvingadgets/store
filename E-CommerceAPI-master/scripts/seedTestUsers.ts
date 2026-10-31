@@ -16,7 +16,7 @@ interface SeedAccount {
 
 const testAccounts: SeedAccount[] = [
   {
-    role: "admin",
+    role: "Admin",
     userName: "Test Admin",
     email: "admin.test@melstore.dev",
     password: "Admin123!",
@@ -24,7 +24,7 @@ const testAccounts: SeedAccount[] = [
     lastName: "Admin",
   },
   {
-    role: "user",
+    role: "User",
     userName: "Test User",
     email: "user.test@melstore.dev",
     password: "User123!",

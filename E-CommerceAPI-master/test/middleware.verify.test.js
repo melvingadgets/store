@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const jwt = require("jsonwebtoken");
-const { verifyToken, requireAdmin } = require("../dist/Middleware/Verify");
+const { verifyToken } = require("../dist/Middleware/Verify");
 const {
   createMockRequest,
   createMockResponse,
@@ -46,7 +46,7 @@ test("verifyToken rejects invalid tokens", () => {
 });
 
 test("verifyToken attaches the decoded payload to the request", () => {
-  const payload = { _id: "user-1", userName: "Mel", role: "user" };
+  const payload = { _id: "user-1", userName: "Mel", role: "User" };
   const restoreJwt = stubMethod(jwt, "verify", () => payload);
   const req = createMockRequest({
     headers: {
@@ -66,29 +66,24 @@ test("verifyToken attaches the decoded payload to the request", () => {
   }
 });
 
-test("requireAdmin allows admin users", () => {
-  const req = createMockRequest({
-    user: { _id: "user-1", userName: "Admin", role: "admin" },
-  });
-  const res = createMockResponse();
-  const next = createNextSpy();
+// `requireAdmin` is gone — it compared lowercase strings and so refused a `SuperAdmin`
+// (`"SuperAdmin" !== "superadmin"`). Its replacements are the kit's `requirePermission` guards,
+// covered by test/rbac.test.js.
 
-  requireAdmin(req, res, next);
-
-  assert.equal(next.called(), true);
-  assert.equal(res.body, undefined);
-});
-
-test("requireAdmin blocks non-admin users", () => {
-  const req = createMockRequest({
-    user: { _id: "user-1", userName: "Mel", role: "user" },
-  });
-  const res = createMockResponse();
-  const next = createNextSpy();
-
-  requireAdmin(req, res, next);
-
-  assert.equal(res.statusCode, 403);
-  assert.equal(res.body.message, "Admin access is required for this action");
-  assert.equal(next.called(), false);
+test("verifyToken refuses a legacy token whose role is not canonical", () => {
+  // No fallback: the store used to treat an unreadable role as `user`, which made a broken
+  // token look like a working customer login.
+  for (const role of ["admin", "superadmin", "owner", undefined, 1]) {
+    const restoreJwt = stubMethod(jwt, "verify", () => ({ _id: "user-1", userName: "Mel", role }));
+    const req = createMockRequest({ headers: { authorization: "Bearer valid-token" } });
+    const res = createMockResponse();
+    const next = createNextSpy();
+    try {
+      verifyToken(req, res, next);
+      assert.equal(res.statusCode, 401, `role ${JSON.stringify(role)} should be refused`);
+      assert.equal(next.called(), false);
+    } finally {
+      restoreJwt();
+    }
+  }
 });

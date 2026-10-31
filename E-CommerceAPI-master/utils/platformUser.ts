@@ -1,6 +1,7 @@
 import { randomBytes } from "crypto";
 import {
   createTokenVerifier,
+  isPlatformRole,
   type TokenVerifier,
   type UserCaller,
 } from "@melvingadgets/platform-kit";
@@ -32,12 +33,19 @@ export const isPlatformToken = (token: string): boolean => {
   }
 };
 
-const toStoreRole = (role: string): UserRole =>
-  role === "Admin" || role === "admin"
-    ? "admin"
-    : role === "SuperAdmin" || role === "superadmin"
-      ? "superadmin"
-      : "user";
+/**
+ * Parses a role from auth into the canonical spelling. There is deliberately no default: the
+ * old `toStoreRole` answered `user` for anything it did not recognise, so a malformed role
+ * produced a working but wrongly-privileged account. Callers treat `null` as a refusal.
+ */
+const parseStoreRole = (role: unknown): UserRole | null => {
+  if (isPlatformRole(role)) return role;
+  const normalized = String(role ?? "").trim().toLowerCase();
+  if (normalized === "user") return "User";
+  if (normalized === "admin") return "Admin";
+  if (normalized === "superadmin") return "SuperAdmin";
+  return null;
+};
 
 type AuthMeUser = { _id: string; email: string | null; fullName: string; role: string };
 
@@ -60,28 +68,32 @@ const fetchAuthMe = async (token: string): Promise<AuthMeUser | null> => {
 
 export type ResolvedStoreUser = { _id: string; userName: string; role: UserRole };
 
-const shape = (user: { _id: unknown; userName?: string | null; role?: string | null }): ResolvedStoreUser => ({
-  _id: String(user._id),
-  userName: String(user.userName || ""),
-  role: (user.role as UserRole) || "user",
-});
-
 /**
  * Maps a verified unified user to a local store account:
  *  1. by personId (already linked, or a prior shadow keyed by personId);
  *  2. else by email from auth — links that existing account (lazy migration);
  *  3. else creates a shadow account keyed by personId. Its password is an unusable
  *     placeholder: the person authenticates only through the unified token.
+ *
+ * The role returned is the **verified claim** (`caller.role`), not the local row: a role change
+ * in auth therefore takes effect on the next token instead of waiting for the shadow row to
+ * sync, and a stale row cannot hand out staff rights. The local row is still written, so the
+ * database stays a readable mirror of the claim.
  */
 export const resolvePlatformUser = async (
   caller: UserCaller,
   token: string,
 ): Promise<ResolvedStoreUser | null> => {
+  if (!isPlatformRole(caller.role)) return null; // fail closed before touching the database
+  const claimRole = caller.role;
+
   const existing = await userModel
     .findOne({ $or: [{ personId: caller.personId }, { _id: caller.personId }] })
     .select({ _id: 1, userName: 1, role: 1 })
     .lean();
-  if (existing) return shape(existing);
+  if (existing) {
+    return { _id: String(existing._id), userName: String(existing.userName || ""), role: claimRole };
+  }
 
   const me = await fetchAuthMe(token);
   if (!me) return null;
@@ -90,8 +102,8 @@ export const resolvePlatformUser = async (
   if (email) {
     const byEmail = await userModel.findOne({ email }).select({ _id: 1, userName: 1, role: 1 }).lean();
     if (byEmail) {
-      await userModel.updateOne({ _id: byEmail._id }, { $set: { personId: caller.personId } });
-      return shape(byEmail);
+      await userModel.updateOne({ _id: byEmail._id }, { $set: { personId: caller.personId, role: claimRole } });
+      return { _id: String(byEmail._id), userName: String(byEmail.userName || ""), role: claimRole };
     }
   }
 
@@ -101,10 +113,14 @@ export const resolvePlatformUser = async (
     // A unique synthetic address for phone-only accounts keeps the email index happy.
     email: email || `${caller.personId}@unified.melvin`,
     password: randomBytes(24).toString("hex"),
-    role: toStoreRole(me.role),
+    role: claimRole,
     verify: true,
     personId: caller.personId,
   });
 
-  return shape({ _id: created._id, userName: created.get("userName"), role: created.get("role") });
+  return {
+    _id: String(created._id),
+    userName: String(created.get("userName") || ""),
+    role: claimRole,
+  };
 };

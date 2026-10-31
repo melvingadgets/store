@@ -38,7 +38,7 @@ test("checkOut rejects empty carts", async () => {
   }));
   const req = createMockRequest({
     params: {},
-    user: { _id: "user-1", userName: "Mel", role: "user" },
+    user: { _id: "user-1", userName: "Mel", role: "User" },
   });
   const res = createMockResponse();
 
@@ -86,7 +86,7 @@ test("checkOut creates an order and deletes the source cart", async () => {
   const req = createMockRequest({
     params: {},
     body: { paymentReference: "pay-1", paymentStatus: "paid" },
-    user: { _id: "user-1", userName: "Mel", role: "user" },
+    user: { _id: "user-1", userName: "Mel", role: "User" },
   });
   const res = createMockResponse();
 
@@ -121,7 +121,7 @@ test("checkOut rejects carts when inventory cannot be reserved", async () => {
   }));
   const req = createMockRequest({
     params: {},
-    user: { _id: "user-1", userName: "Mel", role: "user" },
+    user: { _id: "user-1", userName: "Mel", role: "User" },
   });
   const res = createMockResponse();
 
@@ -148,7 +148,7 @@ test("getOrders returns the current user's order history", async () => {
   const restoreCatalogFetch = stubMethod(easyBuyCatalog, "fetchPublicEasyBuyCatalog", async () => null);
   const req = createMockRequest({
     params: {},
-    user: { _id: "user-1", userName: "Mel", role: "user" },
+    user: { _id: "user-1", userName: "Mel", role: "User" },
   });
   const res = createMockResponse();
 
@@ -208,7 +208,7 @@ test("getOrders prefers EasyBuy catalog images for order products", async () => 
   }));
   const req = createMockRequest({
     params: {},
-    user: { _id: "user-1", userName: "Mel", role: "user" },
+    user: { _id: "user-1", userName: "Mel", role: "User" },
   });
   const res = createMockResponse();
 

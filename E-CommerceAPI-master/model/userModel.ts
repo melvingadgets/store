@@ -1,6 +1,11 @@
 import { Schema, model } from "mongoose";
+import { PLATFORM_ROLES, type PlatformRole } from "@melvingadgets/platform-kit";
 
-export type UserRole = "user" | "admin" | "superadmin";
+// The platform's one role enum (AGENTS.md §4.4). The store used to keep its own lowercase copy,
+// which is what made a mapping function necessary — and that mapping was where a bad role
+// quietly became `user`. Stored and compared in the canonical spelling only.
+export type UserRole = PlatformRole;
+const ROLES = PLATFORM_ROLES;
 
 const userSchema = new Schema(
   {
@@ -23,8 +28,8 @@ const userSchema = new Schema(
     },
     role: {
       type: String,
-      enum: ["user", "admin", "superadmin"],
-      default: "user",
+      enum: ROLES,
+      default: "User",
     },
     // The auth-service personId this account maps to. Set by migrate-store (or lazily, by email,
     // on first unified login) (Shortwork/BACKEND-UNIFICATION §12.4). No default on purpose: a

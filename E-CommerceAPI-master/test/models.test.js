@@ -11,8 +11,9 @@ const userSessionModel = require("../dist/model/userSessionModel").default;
 
 test("user schema protects passwords and defaults role to user", () => {
   assert.equal(userModel.schema.path("password").options.select, false);
-  assert.equal(userModel.schema.path("role").defaultValue, "user");
-  assert.deepEqual(userModel.schema.path("role").enumValues, ["user", "admin", "superadmin"]);
+  // Canonical platform spelling (AGENTS.md §4.4): one enum, shared with auth and every other service.
+  assert.equal(userModel.schema.path("role").defaultValue, "User");
+  assert.deepEqual(userModel.schema.path("role").enumValues, ["User", "Admin", "SuperAdmin"]);
 });
 
 test("profile schema includes phoneNumber and requires a user reference", () => {

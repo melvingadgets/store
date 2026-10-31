@@ -24,7 +24,7 @@ test("userRouter exposes registration, login, user, and verification routes", ()
   assert.ok(getRouteLayer(userRouter, "/admin/user-sessions/summary"));
   assert.deepEqual(getRouteHandlerNames(userRouter, "/all-users", "get"), [
     "verifyToken",
-    "requireAdmin",
+    "requirePermission(store.admin.access)",
     "getAllUsers",
   ]);
   assert.deepEqual(getRouteHandlerNames(userRouter, "/logout-user", "post"), [
@@ -40,12 +40,12 @@ test("userRouter exposes registration, login, user, and verification routes", ()
   ]);
   assert.deepEqual(getRouteHandlerNames(userRouter, "/admin/user-sessions", "get"), [
     "verifyToken",
-    "requireAdmin",
+    "requirePermission(store.admin.access)",
     "getAdminUserSessions",
   ]);
   assert.deepEqual(getRouteHandlerNames(userRouter, "/admin/user-sessions/summary", "get"), [
     "verifyToken",
-    "requireAdmin",
+    "requirePermission(store.admin.access)",
     "getAdminUserSessionSummary",
   ]);
 });
@@ -66,12 +66,12 @@ test("categoryRouter exposes public reads and admin writes", () => {
   assert.ok(getRouteLayer(categoryRouter, "/categories"));
   assert.deepEqual(getRouteHandlerNames(categoryRouter, "/categories", "post"), [
     "verifyToken",
-    "requireAdmin",
+    "requirePermission(store.catalog.write)",
     "createCategory",
   ]);
   assert.deepEqual(getRouteHandlerNames(categoryRouter, "/categories/:id", "delete"), [
     "verifyToken",
-    "requireAdmin",
+    "requirePermission(store.catalog.write)",
     "deleteCate",
   ]);
 });
@@ -79,7 +79,7 @@ test("categoryRouter exposes public reads and admin writes", () => {
 test("productRouter protects creation and keeps public reads available", () => {
   assert.deepEqual(getRouteHandlerNames(productRouter, "/create-product/:userId/:catId", "post"), [
     "verifyToken",
-    "requireAdmin",
+    "requirePermission(store.catalog.write)",
     "multerMiddleware",
     "createProduct",
   ]);
@@ -89,7 +89,7 @@ test("productRouter protects creation and keeps public reads available", () => {
   ]);
   assert.deepEqual(getRouteHandlerNames(productRouter, "/products/:id/storage-options", "put"), [
     "verifyToken",
-    "requireAdmin",
+    "requirePermission(store.catalog.write)",
     "updateProductStorageOptions",
   ]);
 });
@@ -125,6 +125,7 @@ test("orderRouter protects checkout", () => {
   ]);
   assert.deepEqual(getRouteHandlerNames(orderRouter, "/order-checkout", "post"), [
     "verifyToken",
+    "requirePermission(store.orders.create)",
     "checkOut",
   ]);
   assert.deepEqual(getRouteHandlerNames(orderRouter, "/orders/:userId", "get"), [
@@ -133,6 +134,7 @@ test("orderRouter protects checkout", () => {
   ]);
   assert.deepEqual(getRouteHandlerNames(orderRouter, "/order-checkout/:userId", "post"), [
     "verifyToken",
+    "requirePermission(store.orders.create)",
     "checkOut",
   ]);
   assert.deepEqual(getRouteHandlerNames(orderRouter, "/guest-checkout", "post"), [
@@ -162,7 +164,7 @@ test("assistantRouter exposes a public assistant message endpoint", () => {
   ]);
   assert.deepEqual(getRouteHandlerNames(assistantRouter, "/assistant/admin/timings", "get"), [
     "verifyToken",
-    "requireAdmin",
+    "requirePermission(store.admin.access)",
     "assistantTimingSummary",
   ]);
 });

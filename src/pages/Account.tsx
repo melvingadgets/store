@@ -6,6 +6,7 @@ import { useDispatch, useSelector } from 'react-redux'
 import { Link, useNavigate } from 'react-router-dom'
 import { useGetProfileQuery, useUpdateProfileImageMutation, useUpdateProfileMutation } from '../redux/shopApi'
 import type { AppDispatch, RootState } from '../redux/store'
+import { can } from '../lib/access'
 import { logoutUser } from '../services/authService'
 import { handleError } from '../utils/axios'
 import { notify } from '../utils/notification'
@@ -31,7 +32,7 @@ const Account: React.FC = () => {
   const [updateProfileImageMutation, { isLoading: savingImage }] = useUpdateProfileImageMutation()
   const saving = savingProfile || savingImage
   const userRecord = user!
-  const isAdmin = userRecord.role === "admin" || userRecord.role === "superadmin"
+  const isAdmin = can(userRecord, "store.admin.access")
 
   const profileRecord = account?.profile && typeof account.profile === "object" ? account.profile : null
 
@@ -143,7 +144,7 @@ const Account: React.FC = () => {
               <div className="min-w-0 flex-1">
                 <p className="ios-section-title truncate">{account?.userName ?? userRecord.userName}</p>
                 <p className="ios-meta mt-1 truncate">{account?.email ?? userRecord.email}</p>
-                <p className="ios-caption mt-2 uppercase text-primary">{userRecord.role ?? "user"}</p>
+                <p className="ios-caption mt-2 uppercase text-primary">{userRecord.role ?? "User"}</p>
               </div>
             </div>
 

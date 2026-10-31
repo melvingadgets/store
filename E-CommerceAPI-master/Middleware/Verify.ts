@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { env } from "../config/env";
+import { isPlatformRole } from "@melvingadgets/platform-kit";
 import { getPlatformUserVerifier, isPlatformToken, resolvePlatformUser } from "../utils/platformUser";
 
 const unauthorized = (res: Response, message: string) =>
@@ -37,6 +38,11 @@ export const verifyToken = async (req: Request, res: Response, next: NextFunctio
 
   try {
     const payload = jwt.verify(token, env.jwtSecret()) as Express.UserPayload;
+    // No default: the store used to fall through to `user` for anything unrecognised, which
+    // made a malformed role look like a working login. An unreadable role is a 401.
+    if (!isPlatformRole(payload?.role)) {
+      return unauthorized(res, "Token has expired or is invalid");
+    }
     req.user = payload;
     return next();
   } catch {
@@ -44,15 +50,12 @@ export const verifyToken = async (req: Request, res: Response, next: NextFunctio
   }
 };
 
-export const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
-  const role = req.user?.role;
+// `requireAdmin` used to live here. It compared lowercase role strings and returned 403 for a
+// `SuperAdmin`, because `"SuperAdmin" !== "superadmin"` — the exact lockout this rollout fixes.
+// Every admin route now names the permission it needs from @melvingadgets/platform-kit:
+//   store.admin.access     — staff-only reads (all users, sessions, assistant timings)
+//   store.catalog.write    — categories and products
+//   store.orders.manage    — order status changes
+//   store.orders.create    — a customer placing an order
+// The permissions themselves are defined once, in the kit (docs/rbac-unification.md).
 
-  if (role === "admin" || role === "superadmin") {
-    return next();
-  }
-
-  return res.status(403).json({
-    success: 0,
-    message: "Admin access is required for this action",
-  });
-};

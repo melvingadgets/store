@@ -25,6 +25,7 @@ import {
   useUpdateProductStorageOptionsMutation,
 } from '../redux/shopApi'
 import type { RootState } from '../redux/store'
+import { can } from '../lib/access'
 import type { AssistantTimingStageNode, ProductStorageOption, UserSessionRecord } from '../types/domain'
 import { handleError } from '../utils/axios'
 import { notify } from '../utils/notification'
@@ -91,7 +92,9 @@ const Admin: React.FC = () => {
   })
   const [productImage, setProductImage] = useState<File | null>(null)
 
-  const isAdmin = user?.role === "admin" || user?.role === "superadmin"
+  // Permission, not a role string: SuperAdmin inherits Admin, and the API enforces exactly
+  // this permission on the same endpoints, so the check and the request cannot disagree.
+  const isAdmin = can(user, "store.admin.access")
   const { data: users = [], isFetching: usersLoading } = useGetAllUsersQuery(undefined, { skip: !isAdmin })
   const { data: categories = [], isFetching: categoriesLoading } = useGetCategoriesQuery(undefined, { skip: !isAdmin })
   const { data: products = [], isFetching: productsLoading } = useGetProductsQuery(undefined, { skip: !isAdmin })
@@ -757,7 +760,7 @@ const Admin: React.FC = () => {
               <div key={record._id} className="ios-card-soft px-4 py-3">
                 <p className="ios-card-title">{record.userName}</p>
                 <p className="ios-meta mt-1">{record.email}</p>
-                <p className="ios-caption mt-2 uppercase text-primary">{record.role ?? "user"}</p>
+                <p className="ios-caption mt-2 uppercase text-primary">{record.role ?? "User"}</p>
               </div>
             ))}
           </div>

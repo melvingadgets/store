@@ -21,7 +21,7 @@ test("createProduct requires a product name", async () => {
   const req = createMockRequest({
     params: { catId: "cat-1" },
     body: { name: "" },
-    user: { _id: "admin-1", userName: "Admin", role: "admin" },
+    user: { _id: "admin-1", userName: "Admin", role: "Admin" },
   });
   const res = createMockResponse();
 
@@ -35,7 +35,7 @@ test("createProduct requires an uploaded image", async () => {
   const req = createMockRequest({
     params: { catId: "cat-1" },
     body: { name: "Phone" },
-    user: { _id: "admin-1", userName: "Admin", role: "admin" },
+    user: { _id: "admin-1", userName: "Admin", role: "Admin" },
   });
   const res = createMockResponse();
 
@@ -51,7 +51,7 @@ test("createProduct requires an existing category", async () => {
     params: { catId: "cat-1" },
     body: { name: "Phone" },
     file: { filename: "phone.png", path: "uploads/phone.png" },
-    user: { _id: "admin-1", userName: "Admin", role: "admin" },
+    user: { _id: "admin-1", userName: "Admin", role: "Admin" },
   });
   const res = createMockResponse();
 
@@ -86,7 +86,7 @@ test("createProduct creates a product and appends it to the category", async () 
     params: { catId: "cat-1" },
     body: { name: "Phone", desc: "Great phone", qty: "3", price: "500" },
     file: { filename: "phone.png", path: "uploads/phone.png" },
-    user: { _id: "admin-1", userName: "Admin", role: "admin" },
+    user: { _id: "admin-1", userName: "Admin", role: "Admin" },
   });
   const res = createMockResponse();
 
