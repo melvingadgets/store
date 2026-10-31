@@ -1,3 +1,4 @@
+import { buildPlatformCorsOptions } from "./utils/corsHelper";
 import express, { type Application } from "express";
 import cors from "cors";
 import morgan from "morgan";
@@ -19,7 +20,7 @@ import { getPlatformUserVerifier } from "./utils/platformUser";
 export const mainApp = (app: Application) => {
   app.set("trust proxy", true);
   app.use(requestLog("store"));
-  app.use(cors());
+  app.use(cors(buildPlatformCorsOptions(env.corsOrigins)));
   // The JSON request log is the record; morgan's coloured line is a local-dev convenience only.
   if (env.nodeEnv !== "production") {
     app.use(morgan("dev"));
