@@ -9,3 +9,5 @@ E-CommerceAPI-master/node_modules
 node_modules
 easybuy-next/
 dist/
+# QA Reports and Bug Audits
+qa-report/
