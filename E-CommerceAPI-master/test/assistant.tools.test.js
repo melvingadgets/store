@@ -2,6 +2,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const { createCapabilityRegistry } = require("../dist/assistant/capabilityRegistry");
+const easyBuyCatalog = require("../dist/utils/easyBuyCatalog");
+const { stubMethod } = require("./helpers/testUtils");
 
 const createProductStore = (products) => ({
   findById: (productId) => ({
@@ -40,6 +42,18 @@ const createCategoryStore = (categories = []) => ({
   }),
 });
 
+// The capabilities read EasyBuy's public catalog, directly or through its 5-minute cache. Unstubbed,
+// these tests called production EasyBuy, and its live models (an "iPhone XR") outranked the fixtures.
+const catalogFreeTest = (name, fn) =>
+  test(name, async (t) => {
+    const restoreCatalogFetch = stubMethod(easyBuyCatalog, "fetchPublicEasyBuyCatalog", async () => null);
+    try {
+      await fn(t);
+    } finally {
+      restoreCatalogFetch();
+    }
+  });
+
 test("capabilityRegistry rejects unknown capabilities", async () => {
   const registry = createCapabilityRegistry();
 
@@ -65,7 +79,7 @@ test("capabilityRegistry exposes the first five assistant capabilities", () => {
   ]);
 });
 
-test("capabilityRegistry searches products by query and returns list items", async () => {
+catalogFreeTest("capabilityRegistry searches products by query and returns list items", async () => {
   const products = [
     {
       _id: "prod-1",
@@ -96,7 +110,7 @@ test("capabilityRegistry searches products by query and returns list items", asy
   assert.equal(result.data.products[0].name, "iPhone 15");
 });
 
-test("capabilityRegistry returns product details for a known product reference", async () => {
+catalogFreeTest("capabilityRegistry returns product details for a known product reference", async () => {
   const products = [
     {
       _id: "prod-1",
@@ -127,7 +141,7 @@ test("capabilityRegistry returns product details for a known product reference",
   assert.equal(result.data.name, "iPhone 15");
 });
 
-test("capabilityRegistry checks product availability by requested capacity", async () => {
+catalogFreeTest("capabilityRegistry checks product availability by requested capacity", async () => {
   const registry = createCapabilityRegistry({
     productStore: createProductStore([
       {
@@ -158,7 +172,7 @@ test("capabilityRegistry checks product availability by requested capacity", asy
   assert.match(result.data.summary, /currently unavailable/);
 });
 
-test("capabilityRegistry returns missing swap fields before estimating", async () => {
+catalogFreeTest("capabilityRegistry returns missing swap fields before estimating", async () => {
   const registry = createCapabilityRegistry();
 
   const result = await registry.executeCapability({
@@ -173,7 +187,7 @@ test("capabilityRegistry returns missing swap fields before estimating", async (
   assert.deepEqual(result.data.missingRequiredFields, ["targetProductId", "tradeInStorage"]);
 });
 
-test("capabilityRegistry returns a ready swap estimate when enough details are present", async () => {
+catalogFreeTest("capabilityRegistry returns a ready swap estimate when enough details are present", async () => {
   const registry = createCapabilityRegistry({
     resolveSwapEvaluation: async () => ({
       ok: true,
@@ -203,7 +217,7 @@ test("capabilityRegistry returns a ready swap estimate when enough details are p
   assert.match(result.data.summary, /Estimated trade-in credit/);
 });
 
-test("capabilityRegistry returns swap requirements guidance", async () => {
+catalogFreeTest("capabilityRegistry returns swap requirements guidance", async () => {
   const registry = createCapabilityRegistry();
 
   const result = await registry.executeCapability({

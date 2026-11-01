@@ -82,6 +82,9 @@ test("createProduct creates a product and appends it to the category", async () 
     ...createdProduct,
     ...payload,
   }));
+  // The response swaps in EasyBuy catalog images; without this stub it called production EasyBuy
+  // and returned whatever image its live catalog matched to "Phone".
+  const restoreCatalogFetch = stubMethod(easyBuyCatalog, "fetchPublicEasyBuyCatalog", async () => null);
   const req = createMockRequest({
     params: { catId: "cat-1" },
     body: { name: "Phone", desc: "Great phone", qty: "3", price: "500" },
@@ -103,6 +106,7 @@ test("createProduct creates a product and appends it to the category", async () 
     restoreUserFind();
     restoreUpload();
     restoreCreate();
+    restoreCatalogFetch();
   }
 });
 
