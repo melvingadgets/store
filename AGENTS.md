@@ -39,6 +39,20 @@
    - When cross-repository layout changes occur, update the workspace overview accordingly.
    - Run relevant repository verification and affected shared contract checks before finishing.
    - Rebuild only affected consumers and verify health. Preserve composed identities, data volumes, existing credentials, and retained rollback histories.
+4. **Hierarchical CI/CD Pipeline & Neo-Cloud Deployment Gating:**
+   - Every repository must maintain its own dedicated GitHub Actions CI/CD workflow (`.github/workflows/ci-cd.yml`).
+   - **System Build Verification:** Clean build of the application or service artifacts (`npm run build`, `tsc`, or container build) with zero unresolved errors or broken assets.
+   - **Hierarchical Test Progression:** Tests must be structured and executed in strict hierarchical tiers:
+     1. *Unit Tests*: Fast, isolated tests verifying pure functions, models, domain calculations, and finite state machines.
+     2. *Integration Tests*: Component-level and database/cache/service integrations executing actual application code paths with genuine transactions and state changes.
+     3. *End-to-End (E2E) & Contract Tests*: Full critical path flows and producer-consumer schema conformance tests against authoritative shared contracts.
+   - **Code Quality & Disciplined Linting:** Enforce strict static analysis, type checking (`tsc --noEmit`), and linting rules across all commits and pull requests.
+   - **Vulnerability & Dependency Auditing:** Automated security auditing of codebase and packages (`npm audit --audit-level=high`, `pip audit` for Python components, and vulnerability scanning). Detect, block, and resolve security advisories before artifact promotion.
+   - **Gated Neo-Cloud Deployment:**
+     - Deployments run only after build verification, quality linting, vulnerability audits, and all hierarchical test tiers succeed completely (100% green).
+     - **Backends** (`unified-auth-service`, `EasybuytrackerBackend`, `store`, `reseller-service`, `invoice-service`, `whatsapp-backend`) deploy to **Railway**.
+     - **Frontends** (`melvin-os`, `EasybuyFrontend`, `computer-village`) deploy to **Vercel**.
+     - Shared contracts and libraries (`melvin-platform-kit`) run CI verification and contract validation prior to consumer usage.
 
 ## Bug Audit Output Location & Persistent Severity-Based QA Reporting
 1. **Audit Output Location:**

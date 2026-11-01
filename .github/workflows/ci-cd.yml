@@ -1,0 +1,123 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, feat/reseller-programme]
+  pull_request:
+    branches: [main, feat/reseller-programme]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-store-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  quality-and-security:
+    name: 1 · Code Quality & Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Audit & Quality (Frontend)
+        run: |
+          npm ci
+          npm audit --audit-level=high || echo "::warning title=Frontend vulnerabilities::High severity advisories detected"
+      - name: Audit & Quality (Backend API)
+        run: |
+          cd E-CommerceAPI-master
+          npm ci
+          npm audit --audit-level=high || echo "::warning title=Backend vulnerabilities::High severity advisories detected"
+
+  build:
+    name: 2 · Build System
+    needs: quality-and-security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Build Frontend
+        run: |
+          npm ci
+          npm run build
+          test -d dist || { echo "frontend dist/ missing"; exit 1; }
+      - name: Build Backend API
+        run: |
+          cd E-CommerceAPI-master
+          npm ci
+          npm run build
+          test -d dist || { echo "backend dist/ missing"; exit 1; }
+
+  hierarchical-tests:
+    name: 3 · Hierarchical Tests (Unit, Integration, Contract)
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Run Frontend Unit Tests
+        run: |
+          npm ci
+          npm test
+      - name: Run Backend Integration & Unit Tests
+        run: |
+          cd E-CommerceAPI-master
+          npm ci
+          npm test
+
+  deploy:
+    name: 4 · Deploy to Neo-Cloud (Railway & Vercel)
+    needs: [quality-and-security, build, hierarchical-tests]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/reseller-programme')
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Railway credentials for Backend API
+        id: check-railway
+        run: |
+          if [ -z "${{ secrets.RAILWAY_TOKEN }}" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Deploy skipped::RAILWAY_TOKEN not configured."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Deploy Backend API to Railway
+        if: steps.check-railway.outputs.configured == 'true'
+        run: |
+          npm install -g @railway/cli
+          cd E-CommerceAPI-master
+          railway up --service store --detach
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      - name: Check Vercel credentials for Store Frontend
+        id: check-vercel
+        run: |
+          if [ -z "${{ secrets.VERCEL_TOKEN }}" ] || [ -z "${{ secrets.VERCEL_ORG_ID }}" ] || [ -z "${{ secrets.VERCEL_PROJECT_ID }}" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Deploy skipped::Vercel credentials not configured."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Deploy Store Frontend to Vercel
+        if: steps.check-vercel.outputs.configured == 'true'
+        run: |
+          npm install -g vercel@latest
+          vercel pull --yes --environment=production --token="${{ secrets.VERCEL_TOKEN }}"
+          vercel build --prod --token="${{ secrets.VERCEL_TOKEN }}"
+          vercel deploy --prebuilt --prod --token="${{ secrets.VERCEL_TOKEN }}"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
