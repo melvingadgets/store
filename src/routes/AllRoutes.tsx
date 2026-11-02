@@ -23,6 +23,7 @@ const History = lazy(() => import("../pages/History"))
 const Account = lazy(() => import("../pages/Account"))
 const Admin = lazy(() => import("../pages/Admin"))
 const AdminSessions = lazy(() => import("../pages/AdminSessions"))
+const AdminReceiptAssign = lazy(() => import("../pages/AdminReceiptAssign"))
 const SwapDevice = lazy(() => import("../pages/SwapDevice"))
 const SwapPage = lazy(() => import("../pages/SwapPage"))
 // const Fakeproduct = lazy(() => import("../loginFake/Productss"))
@@ -66,6 +67,8 @@ const fullAppRoutes: RouteObject[] = [
                       children: [
                         {path: "/admin", element: withSuspense(Admin)},
                         {path: "/admin/sessions", element: withSuspense(AdminSessions)},
+                        {path: "/admin/receipts", element: withSuspense(AdminReceiptAssign)},
+                        {path: "/admin/invoices", element: withSuspense(AdminReceiptAssign)},
                         {path: "/menu", element: withSuspense(Admin)},
                       ]
                     },

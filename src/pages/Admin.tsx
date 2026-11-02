@@ -8,6 +8,7 @@ import {
   MdOutlineArrowBack,
   MdOutlineCategory,
   MdOutlinePeople,
+  MdOutlineReceiptLong,
   MdSave,
 } from 'react-icons/md'
 import { useSelector } from 'react-redux'
@@ -316,6 +317,13 @@ const Admin: React.FC = () => {
           </div>
 
           <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+            <Link
+              to="/admin/receipts"
+              className="ios-primary-button w-full justify-center gap-2 sm:w-auto !bg-white !text-primary hover:!bg-white/90"
+            >
+              <MdOutlineReceiptLong size={20} />
+              Assign Receipt
+            </Link>
             <Link
               to="/admin/sessions"
               className="ios-secondary-button w-full justify-center bg-white/18 text-white backdrop-blur-sm sm:w-auto"
