@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "test": "npm run build && node --require ./test/helpers/hermetic.js --test --experimental-test-isolation=none .\\test\\*.test.js",
     "dev": "ts-node-dev --respawn --transpile-only ./index.ts",
