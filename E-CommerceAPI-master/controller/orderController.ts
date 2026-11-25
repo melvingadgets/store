@@ -8,7 +8,7 @@ import userModel from "../model/userModel";
 import { inTransaction } from "@melvingadgets/platform-kit";
 import { env } from "../config/env";
 import { loadCatalogModels, withCatalogImagesForOrders } from "../utils/catalogImagePresenter";
-import { computeOrderFees, nairaNumberToKobo, type OrderFees } from "../utils/orderFees";
+import { computeOrderFees, type OrderFees } from "../utils/orderFees";
 import {
   mongoClient,
   publishOrderCancelled,
@@ -16,6 +16,7 @@ import {
   publishOrderPaid,
   traceIdOf,
 } from "../utils/platformMessaging";
+import { buildOrderPaidFacts, orderMoney } from "../services/orderPayments";
 import { findStorageOption, normalizeCapacity, summarizeStorageOptions } from "../utils/storageOptions";
 
 // Fee fields stored on an order (Shortwork/RESELLER-PLAN.md §8a), integer kobo.
@@ -688,19 +689,6 @@ const ORDER_STEPS: Record<OrderAction, { from: Record<string, unknown>; set: (no
 const isOrderAction = (value: unknown): value is OrderAction =>
   typeof value === "string" && Object.prototype.hasOwnProperty.call(ORDER_STEPS, value);
 
-const orderMoney = (order: Record<string, any>) => {
-  const subtotalKobo = Number.isSafeInteger(order.subtotalKobo)
-    ? order.subtotalKobo
-    : (order.orderItem ?? []).reduce(
-        (total: number, item: { price: number; quantity: number }) => total + nairaNumberToKobo(item.price) * Math.max(1, item.quantity),
-        0,
-      );
-  const deliveryFeeKobo = Number.isSafeInteger(order.deliveryFeeKobo) ? order.deliveryFeeKobo : 0;
-  const serviceFeeKobo = Number.isSafeInteger(order.serviceFeeKobo) ? order.serviceFeeKobo : 0;
-  const totalKobo = Number.isSafeInteger(order.totalKobo) ? order.totalKobo : subtotalKobo + deliveryFeeKobo + serviceFeeKobo;
-  return { subtotalKobo, deliveryFeeKobo, serviceFeeKobo, totalKobo };
-};
-
 // PATCH /api/v1/orders/:orderId/status  { action }   (admin only)
 export const updateOrderStatus = async (req: Request, res: Response): Promise<Response> => {
   const orderId = sanitizeValue(req.params.orderId);
@@ -729,16 +717,7 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<Re
       const money = orderMoney(order);
       const traceId = traceIdOf(req as { traceId?: string });
       if (action === "mark_paid") {
-        await publishOrderPaid(session, traceId, {
-          orderId,
-          personId,
-          items: (order.orderItem ?? []).slice(0, 100).map((item: any) => ({
-            name: String(item.products?.name || "Item").slice(0, 200),
-            quantity: Math.max(1, Number(item.quantity) || 1),
-            priceKobo: nairaNumberToKobo(item.price),
-          })),
-          ...money,
-        });
+        await publishOrderPaid(session, traceId, buildOrderPaidFacts(orderId, order));
       } else if (action === "complete") {
         await publishOrderCompleted(session, traceId, { orderId, personId, serviceFeeKobo: money.serviceFeeKobo });
       } else {

@@ -9,6 +9,7 @@ import categoryRouter from "./router/categoryRouter";
 import productRouter from "./router/productRouter";
 import cartRouter from "./router/cartRouter";
 import orderRouter from "./router/orderRouter";
+import paymentRouter from "./router/paymentRouter";
 import swapRouter from "./router/swapRouter";
 import assistantRouter from "./router/assistantRouter";
 import { requestLog } from "./Middleware/requestLog";
@@ -31,7 +32,14 @@ export const mainApp = (app: Application) => {
     app.post("/internal/events", express.raw({ type: () => true, limit: "1mb" }), buildEventReceiver());
   }
 
-  app.use(express.json());
+  app.use(
+    express.json({
+      verify: (req, _res, buf) => {
+        // Keep exact wire bytes for Paystack x-paystack-signature HMAC verification.
+        (req as express.Request & { rawBody?: Buffer }).rawBody = buf;
+      },
+    }),
+  );
   app.use(express.urlencoded({ extended: true }));
   app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
   // Service-token reads for other platform services (the reseller service's order lookups).
@@ -64,6 +72,7 @@ export const mainApp = (app: Application) => {
   app.use("/api/v1", cartRouter);
   app.use("/api/v1", productRouter);
   app.use("/api/v1", orderRouter);
+  app.use("/api/v1", paymentRouter);
   app.use("/api/v1", swapRouter);
   app.use("/api/v1", assistantRouter);
 };

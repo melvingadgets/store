@@ -144,9 +144,13 @@ export interface OrderRecord {
   user: string;
   orderItem: CartItemRecord[];
   bill: number;
+  totalKobo?: number;
   paymentStatus: "pending" | "paid";
   orderStatus: "created" | "processing" | "completed" | "cancelled";
   paymentReference: string;
+  paystackReference?: string;
+  paymentProvider?: "paystack" | "manual";
+  paidAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -165,9 +169,13 @@ export interface GuestCheckoutRecord {
   guest: GuestCheckoutGuest;
   orderItem: CartItemRecord[];
   bill: number;
+  totalKobo?: number;
   paymentStatus: "pending" | "paid";
   orderStatus: "created" | "processing" | "completed" | "cancelled";
   paymentReference: string;
+  paystackReference?: string;
+  paymentProvider?: "paystack" | "manual";
+  paidAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }

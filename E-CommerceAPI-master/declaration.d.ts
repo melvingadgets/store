@@ -41,6 +41,11 @@ declare global {
       FLW_PUBLIC_KEY?: string;
       FLW_SECRET_KEY?: string;
       FLW_ENCRYPTION_KEY?: string;
+      FLW_WEBHOOK_HASH?: string;
+      FLW_BASE_URL?: string;
+      PAYSTACK_PUBLIC_KEY?: string;
+      PAYSTACK_SECRET_KEY?: string;
+      PAYSTACK_BASE_URL?: string;
       AI_PROVIDER?: string;
       AI_API_KEY?: string;
       AI_MODEL?: string;

@@ -7,6 +7,7 @@ const categoryRouter = require("../dist/router/categoryRouter").default;
 const productRouter = require("../dist/router/productRouter").default;
 const cartRouter = require("../dist/router/cartRouter").default;
 const orderRouter = require("../dist/router/orderRouter").default;
+const paymentRouter = require("../dist/router/paymentRouter").default;
 const swapRouter = require("../dist/router/swapRouter").default;
 const assistantRouter = require("../dist/router/assistantRouter").default;
 const { getRouteHandlerNames, getRouteLayer } = require("./helpers/testUtils");
@@ -166,5 +167,20 @@ test("assistantRouter exposes a public assistant message endpoint", () => {
     "verifyToken",
     "requirePermission(store.admin.access)",
     "assistantTimingSummary",
+  ]);
+});
+
+test("paymentRouter exposes Paystack initialize, verify, and webhook routes", () => {
+  assert.deepEqual(getRouteHandlerNames(paymentRouter, "/payments/paystack/initialize", "post"), [
+    "paymentRateLimiter",
+    "verifyOptionalToken",
+    "initializePaystackPayment",
+  ]);
+  assert.deepEqual(getRouteHandlerNames(paymentRouter, "/payments/paystack/verify", "post"), [
+    "paymentRateLimiter",
+    "verifyPaystackPayment",
+  ]);
+  assert.deepEqual(getRouteHandlerNames(paymentRouter, "/webhooks/paystack", "post"), [
+    "handlePaystackWebhook",
   ]);
 });

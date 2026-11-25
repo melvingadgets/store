@@ -63,6 +63,20 @@ const orderSchema = new Schema(
       type: String,
       default: "",
     },
+    paystackReference: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    paystackTransactionId: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    paymentProvider: {
+      type: String,
+      enum: ["paystack", "manual"],
+    },
     // ── Reseller programme (Shortwork/RESELLER-PLAN.md §7, §8a). All optional, so orders created
     // before these fields existed are untouched. Money in integer kobo; `bill` above stays the item
     // total in naira, as before (Shortwork/AGENTS.md §7.1).
@@ -88,5 +102,7 @@ const orderSchema = new Schema(
 );
 
 orderSchema.index({ personId: 1, createdAt: 1 }, { partialFilterExpression: { personId: { $type: "string" } } });
+orderSchema.index({ paystackReference: 1 });
+orderSchema.index({ paymentReference: 1 });
 
 export default model("orders", orderSchema);

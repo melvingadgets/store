@@ -63,6 +63,23 @@ const guestCheckoutSchema = new Schema(
       default: "",
       trim: true,
     },
+    paystackReference: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    paystackTransactionId: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    paymentProvider: {
+      type: String,
+      enum: ["paystack", "manual"],
+    },
+    paidAt: {
+      type: Date,
+    },
     // Fees, as on a signed-in order (Shortwork/RESELLER-PLAN.md §8a): integer kobo, optional.
     subtotalKobo: { type: Number, validate: { validator: Number.isSafeInteger, message: "subtotalKobo must be integer kobo" } },
     deliveryFeeKobo: { type: Number, validate: { validator: Number.isSafeInteger, message: "deliveryFeeKobo must be integer kobo" } },
@@ -75,5 +92,8 @@ const guestCheckoutSchema = new Schema(
     timestamps: true,
   },
 );
+
+guestCheckoutSchema.index({ paystackReference: 1 });
+guestCheckoutSchema.index({ paymentReference: 1 });
 
 export default model("guestCheckouts", guestCheckoutSchema);

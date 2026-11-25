@@ -8,6 +8,7 @@ The project now includes:
 
 - a backend-owned AI assistant tool system with verified tool coverage
 - backend-first swap, pricing, product, and image behavior
+- Paystack checkout, server-side transaction verification, and HMAC-SHA512 webhook settlement for signed-in and guest orders
 - user session telemetry with admin visibility
 - dedicated admin session monitoring routes and UI
 - custom error boundary and 404 handling

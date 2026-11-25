@@ -115,9 +115,16 @@ export const env = {
     apiSecret: process.env.CLOUDINARY_API_SECRET,
   },
   flutterwave: {
-    publicKey: process.env.FLW_PUBLIC_KEY,
-    secretKey: process.env.FLW_SECRET_KEY,
-    encryptionKey: process.env.FLW_ENCRYPTION_KEY,
+    publicKey: optionalEnv("FLW_PUBLIC_KEY"),
+    secretKey: optionalEnv("FLW_SECRET_KEY"),
+    encryptionKey: optionalEnv("FLW_ENCRYPTION_KEY"),
+    webhookHash: optionalEnv("FLW_WEBHOOK_HASH"),
+    baseUrl: (optionalEnv("FLW_BASE_URL") ?? "https://api.flutterwave.com/v3").replace(/\/+$/, ""),
+  },
+  paystack: {
+    publicKey: optionalEnv("PAYSTACK_PUBLIC_KEY"),
+    secretKey: optionalEnv("PAYSTACK_SECRET_KEY"),
+    baseUrl: (optionalEnv("PAYSTACK_BASE_URL") ?? "https://api.paystack.co").replace(/\/+$/, ""),
   },
 };
 
@@ -128,4 +135,5 @@ export const hasCloudinaryConfig = Boolean(
 export const hasFlutterwaveConfig = Boolean(
   env.flutterwave.publicKey && env.flutterwave.secretKey && env.flutterwave.encryptionKey,
 );
+export const hasPaystackPaymentConfig = () => Boolean(env.paystack.secretKey);
 export const hasAiConfig = Boolean(env.ai.provider && env.ai.apiKey && env.ai.model);

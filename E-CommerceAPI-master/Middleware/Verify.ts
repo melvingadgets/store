@@ -10,10 +10,22 @@ const unauthorized = (res: Response, message: string) =>
     message,
   });
 
-export const verifyToken = async (req: Request, res: Response, next: NextFunction) => {
+const runTokenVerification = (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+  optional: boolean,
+) => {
   const authHeader = req.headers.authorization;
 
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  if (!authHeader) {
+    if (optional) {
+      return next();
+    }
+    return unauthorized(res, "Please provide a valid bearer token");
+  }
+
+  if (!authHeader.startsWith("Bearer ")) {
     return unauthorized(res, "Please provide a valid bearer token");
   }
 
@@ -23,19 +35,23 @@ export const verifyToken = async (req: Request, res: Response, next: NextFunctio
   // person to a local store account. Runs alongside the store's own token (§7.1).
   const platformVerifier = getPlatformUserVerifier();
   if (platformVerifier && isPlatformToken(token)) {
-    try {
-      const caller = await platformVerifier.verifyUserToken(token);
-      const user = await resolvePlatformUser(caller, token);
-      if (!user) {
+    return (async () => {
+      try {
+        const caller = await platformVerifier.verifyUserToken(token);
+        const user = await resolvePlatformUser(caller, token);
+        if (!user) {
+          return unauthorized(res, "Token has expired or is invalid");
+        }
+        req.user = user;
+        return next();
+      } catch {
         return unauthorized(res, "Token has expired or is invalid");
       }
-      req.user = user;
-      return next();
-    } catch {
-      return unauthorized(res, "Token has expired or is invalid");
-    }
+    })();
   }
 
+  // Keep legacy HS256 verification synchronous before returning so callers and unit tests
+  // without an async await observe req.user / 401 immediately.
   try {
     const payload = jwt.verify(token, env.jwtSecret()) as Express.UserPayload;
     // No default: the store used to fall through to `user` for anything unrecognised, which
@@ -49,6 +65,12 @@ export const verifyToken = async (req: Request, res: Response, next: NextFunctio
     return unauthorized(res, "Token has expired or is invalid");
   }
 };
+
+export const verifyToken = (req: Request, res: Response, next: NextFunction) =>
+  runTokenVerification(req, res, next, false);
+
+export const verifyOptionalToken = (req: Request, res: Response, next: NextFunction) =>
+  runTokenVerification(req, res, next, true);
 
 // `requireAdmin` used to live here. It compared lowercase role strings and returned 403 for a
 // `SuperAdmin`, because `"SuperAdmin" !== "superadmin"` — the exact lockout this rollout fixes.

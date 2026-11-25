@@ -283,6 +283,30 @@ const cartSlice = createSlice({
     clearLastOrder(state) {
       state.lastOrder = null;
     },
+    updateLastOrderPayment(
+      state,
+      action: {
+        payload: {
+          orderId: string;
+          paymentStatus: "pending" | "paid";
+          orderStatus: "created" | "processing" | "completed" | "cancelled";
+          paymentReference?: string;
+          paystackReference?: string;
+          paidAt?: string | null;
+        };
+      },
+    ) {
+      if (state.lastOrder && state.lastOrder._id === action.payload.orderId) {
+        state.lastOrder = {
+          ...state.lastOrder,
+          paymentStatus: action.payload.paymentStatus,
+          orderStatus: action.payload.orderStatus,
+          ...(action.payload.paymentReference ? { paymentReference: action.payload.paymentReference } : {}),
+          ...(action.payload.paystackReference ? { paystackReference: action.payload.paystackReference } : {}),
+          ...(action.payload.paidAt !== undefined ? { paidAt: action.payload.paidAt } : {}),
+        };
+      }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -375,5 +399,5 @@ const cartSlice = createSlice({
   },
 });
 
-export const { clearLastOrder, resetCartState } = cartSlice.actions;
+export const { clearLastOrder, resetCartState, updateLastOrderPayment } = cartSlice.actions;
 export default cartSlice.reducer;

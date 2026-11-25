@@ -26,6 +26,8 @@ This matrix tracks the backend route surface against the frontend implementation
 | `DELETE` | `/api/v1/remove-item/:userId` | wired | `src/pages/Cart.tsx` |
 | `POST` | `/api/v1/order-checkout/:userId` | wired | `src/pages/Checkout.tsx` |
 | `GET` | `/api/v1/orders/:userId` | wired | `src/pages/History.tsx` |
+| `POST` | `/api/v1/payments/paystack/initialize` | wired | `src/services/paymentService.ts`, `src/pages/Checkout.tsx`, `src/pages/History.tsx`, `src/pages/OrderConfirmation.tsx` |
+| `POST` | `/api/v1/payments/paystack/verify` | wired | `src/services/paymentService.ts`, `src/pages/OrderConfirmation.tsx` |
 
 ## Backend-rendered and operational routes
 
@@ -35,6 +37,7 @@ This matrix tracks the backend route surface against the frontend implementation
 | `GET` | `/health` | backend-only | operational health endpoint; covered by backend tests |
 | `GET` | `/page/data/:id` | backend-rendered | verification view rendered by `Views/verifyAccount.ejs` |
 | `GET` | `/api/v1/verify-account/:id` | backend-rendered | email verification flow resolves on the backend |
+| `POST` | `/api/v1/webhooks/paystack` | backend-only | Paystack webhook settlement (`x-paystack-signature` HMAC-SHA512 over raw wire bytes + `/transaction/verify/:reference`) |
 
 ## Compatibility aliases
 

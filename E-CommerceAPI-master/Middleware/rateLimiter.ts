@@ -54,10 +54,20 @@ const guestCheckoutLimiter = createRateLimiter({
   message: "too many guest checkout attempts, please try again later",
 });
 
+const paymentLimiter = createRateLimiter({
+  maxRequests: 25,
+  windowMs: 10 * 60 * 1000,
+  message: "too many payment requests, please try again later",
+});
+
 export function authRateLimiter(req: Request, res: Response, next: NextFunction) {
   return authLimiter(req, res, next);
 }
 
 export function guestCheckoutRateLimiter(req: Request, res: Response, next: NextFunction) {
   return guestCheckoutLimiter(req, res, next);
+}
+
+export function paymentRateLimiter(req: Request, res: Response, next: NextFunction) {
+  return paymentLimiter(req, res, next);
 }

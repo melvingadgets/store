@@ -5,8 +5,12 @@ import { useDispatch, useSelector } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
 import { checkoutCart, checkoutGuestCart, fetchCart } from '../features/cart/cartSlice'
 import type { AppDispatch, RootState } from '../redux/store'
-import type { GuestCheckoutGuest } from '../types/domain'
+import type { CheckoutRecord, GuestCheckoutGuest } from '../types/domain'
 import { getDeliveryQuote, type DeliveryQuote } from '../services/orderService'
+import { initializePaystackPayment } from '../services/paymentService'
+import { buildOrderConfirmQuery, resolveOrderCheckoutType } from '../lib/paymentState'
+import { extractErrorMessage } from '../utils/axios'
+import { launchPaystackCheckout } from '../utils/paystackCheckout'
 import formatPrice from '../utils/formatPrice'
 import { notify } from '../utils/notification'
 
@@ -28,6 +32,7 @@ const Checkout:React.FC = () => {
   // Delivery fee (the courier's quote) and service fee (2.5 × the delivery fee, non-refundable),
   // shown before the order is placed (Shortwork/RESELLER-PLAN.md §8a). Absent while fees are off.
   const [quote, setQuote] = useState<DeliveryQuote | null>(null)
+  const [isInitializingPayment, setIsInitializingPayment] = useState(false)
   const displayBill = quote?.enabled ? quote.totalKobo / 100 : bill
 
   useEffect(() => {
@@ -80,21 +85,55 @@ const Checkout:React.FC = () => {
       return
     }
 
+    let createdOrder: CheckoutRecord | null = null
     try {
       if (user?._id) {
-        await dispatch(checkoutCart()).unwrap()
+        createdOrder = await dispatch(checkoutCart()).unwrap()
       } else {
         if (!validateGuestForm()) {
           return
         }
 
-        await dispatch(checkoutGuestCart(guestForm)).unwrap()
+        createdOrder = await dispatch(checkoutGuestCart(guestForm)).unwrap()
       }
-
-      notify("success", "Order placed successfully")
-      navigate("/orderconfirm")
     } catch (error) {
-      notify("error", error instanceof Error ? error.message : "Unable to place your order")
+      notify("error", extractErrorMessage(error))
+      return
+    }
+
+    if (!createdOrder?._id) {
+      notify("error", "Unable to place your order")
+      return
+    }
+
+    setIsInitializingPayment(true)
+    try {
+      const checkoutType = resolveOrderCheckoutType(createdOrder)
+      const paymentInitResponse = await initializePaystackPayment({
+        orderId: createdOrder._id,
+        checkoutType,
+        paymentReference: createdOrder.paymentReference,
+        redirectUrl: `${window.location.origin}/orderconfirm`,
+      })
+      const initData = paymentInitResponse.data.data
+      const launchMode = await launchPaystackCheckout(initData, {
+        onInlineSuccess: ({ reference }) => {
+          navigate(buildOrderConfirmQuery({ reference, status: "success" }))
+        },
+        onInlineCancel: () => {
+          navigate(buildOrderConfirmQuery({ reference: initData.reference, status: "cancelled" }))
+        },
+      })
+
+      if (launchMode === "popup") {
+        notify("info", "Complete payment in the Paystack tab, then verify below")
+        navigate(buildOrderConfirmQuery({ reference: initData.reference, pending: true }))
+      }
+    } catch (error) {
+      notify("warning", `${extractErrorMessage(error)}. Your order is saved — retry payment below.`)
+      navigate(buildOrderConfirmQuery({ pending: true }))
+    } finally {
+      setIsInitializingPayment(false)
     }
   }
 
@@ -210,10 +249,16 @@ const Checkout:React.FC = () => {
 
           <button
             onClick={() => void handleOrderConfirmation()}
-            disabled={checkoutStatus === "loading"}
+            disabled={checkoutStatus === "loading" || isInitializingPayment}
             className="ios-primary-button flex w-full justify-center disabled:opacity-70"
           >
-            {checkoutStatus === "loading" ? "Processing order" : user?._id ? "Confirm order" : "Place guest order"}
+            {checkoutStatus === "loading"
+              ? "Creating order..."
+              : isInitializingPayment
+                ? "Opening Paystack..."
+                : user?._id
+                  ? "Pay & confirm order"
+                  : "Continue to payment"}
           </button>
         </div>
       </div>
